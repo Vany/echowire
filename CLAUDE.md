@@ -49,6 +49,17 @@ Ping: WebSocket frame-level ping (not JSON)
 - Coroutines avoided initially (simpler threading model)
 - Direct callback patterns for service-to-UI communication
 
+## Build System
+- **Makefile targets**: Simple interface for common operations
+  - `make install`: Build debug APK and install to connected device
+  - `make build`: Build debug APK only
+  - `make clean`: Clean build artifacts
+  - `make uninstall`: Remove app from device
+  - `make logs`: View filtered logcat output
+  - `make start-service`/`stop-service`: Control service via adb
+- **Gradle wrapper**: Version 8.2, included in repository
+- **Build output**: `app/build/outputs/apk/debug/app-debug.apk`
+
 ## Known Limitations
 - No client tracking (by design)
 - No message replay/history

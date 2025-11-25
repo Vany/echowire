@@ -31,8 +31,9 @@
 - [x] Proper lifecycle management
 - [x] Resource cleanup
 
-## Phase 5: Testing & Polish
-- [ ] Test multiple client connections
-- [ ] Test service restart scenarios
-- [ ] Verify no ANR issues
-- [ ] Test mDNS discovery from clients
+## Phase 5: Build & Deployment
+- [x] Create Makefile with build/install targets
+- [x] Set up Gradle wrapper
+- [ ] Test on physical device
+- [ ] Verify mDNS discovery
+- [ ] Test multi-client connections
