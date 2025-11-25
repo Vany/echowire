@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use futures_util::{SinkExt, StreamExt};
+use futures_util::StreamExt;
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rand::seq::SliceRandom;
 use serde::Deserialize;
