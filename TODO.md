@@ -37,3 +37,14 @@
 - [ ] Test on physical device
 - [ ] Verify mDNS discovery
 - [ ] Test multi-client connections
+
+## Phase 6: CLI Client (uhcli)
+- [x] Create Rust project structure
+- [x] Implement mDNS service discovery
+- [x] Implement service listing
+- [x] Implement random service selection
+- [x] Implement WebSocket client
+- [x] Implement message receiving and display
+- [x] Implement Ctrl+C handler
+- [x] Add CLI to Makefile targets
+- [ ] Test with Android app

@@ -55,3 +55,7 @@ proguard-project.txt
 
 # Android Profiling
 *.hprof
+
+# Rust/Cargo
+cli/target/
+cli/Cargo.lock

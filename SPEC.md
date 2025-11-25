@@ -3,6 +3,14 @@
 ## Overview
 Android application that advertises itself via mDNS and broadcasts random numbers to multiple WebSocket clients.
 
+## Subprojects
+
+### UH Android App (`/app`)
+Android application providing the WebSocket server and mDNS service.
+
+### UH CLI (`/cli`)
+Rust command-line client for discovering and connecting to UH services.
+
 ## Technical Requirements
 
 ### mDNS Service
@@ -41,14 +49,26 @@ Android application that advertises itself via mDNS and broadcasts random number
 - Internal configuration support (not exposed in UI yet)
 - Default values used for initial implementation
 
+## CLI Client Requirements
+- Discovers all UH services via mDNS (`_uh._tcp.local.`)
+- Lists discovered services with details (name, address, port)
+- Connects to a randomly selected service
+- Receives and displays all broadcast messages
+- Clean output format for human consumption
+- Handles connection failures and reconnection
+- Ctrl+C for clean shutdown
+
 ## Non-Functional Requirements
 - Service must run in foreground (Android 8+ requirement)
 - Clean shutdown on app termination
 - Proper resource cleanup (sockets, threads)
 - No ANR (background threads for network operations)
+- CLI client handles network interruptions gracefully
 
 ## Future Considerations
-- Configuration UI
+- Configuration UI for Android app
 - Authentication/authorization
 - Message history
 - Client tracking and statistics
+- CLI client service selection (non-random)
+- CLI client TUI interface with real-time updates

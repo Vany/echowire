@@ -60,6 +60,87 @@ Ping: WebSocket frame-level ping (not JSON)
 - **Gradle wrapper**: Version 8.2, included in repository
 - **Build output**: `app/build/outputs/apk/debug/app-debug.apk`
 
+## CLI Client (uhcli) - Rust Implementation
+
+### Project Structure
+- Location: `/cli` subdirectory
+- Binary name: `uhcli`
+- Rust Edition: 2021
+
+### Key Dependencies
+- **tokio**: Async runtime with full features
+- **tokio-tungstenite**: WebSocket client (async, works with tokio)
+- **mdns-sd**: Pure Rust mDNS/DNS-SD implementation (cross-platform)
+- **serde/serde_json**: JSON deserialization for messages
+- **rand**: Random service selection
+- **anyhow**: Error handling with context
+- **chrono**: Timestamp formatting
+
+### Architecture Decisions
+
+**mDNS Discovery:**
+- `mdns-sd` crate chosen for pure Rust, cross-platform support
+- Discovery timeout: 5 seconds (configurable)
+- Browses for `_uh._tcp.local.` service type
+- Collects all resolved services with addresses
+- Handles service removal events during discovery
+
+**Service Selection:**
+- Uses `rand::seq::SliceRandom` for cryptographically secure random selection
+- Requires at least one discovered service
+- Uses first available IP address from service info
+
+**WebSocket Client:**
+- `tokio-tungstenite` for async WebSocket operations
+- Split stream pattern: separate read/write halves
+- Text messages only (JSON)
+- Automatic pong responses to ping frames
+
+**Message Handling:**
+- Deserializes JSON to `RandomMessage` struct
+- Validates message type == "random"
+- Formats timestamps as HH:MM:SS.mmm using chrono
+- Falls back to raw message display for parsing errors
+
+**Shutdown Handling:**
+- `tokio::signal::ctrl_c()` for graceful Ctrl+C handling
+- `tokio::select!` for concurrent message receiving and signal handling
+- Clean connection closure on shutdown
+
+### Error Handling Strategy
+- `anyhow::Result` for all fallible operations
+- Context added at each error point for debugging
+- Early return on critical failures (no services, connection failure)
+- Continue on non-critical errors (message parse errors)
+
+### Output Format
+```
+UH CLI - WebSocket Random Number Client
+========================================
+
+Discovering services (5s timeout)...
+
+  Found: UH_Service._uh._tcp.local. at hostname:8080
+
+Discovered 1 service(s):
+
+  [1] UH_Service._uh._tcp.local.
+      Host: hostname
+      Port: 8080
+      Addresses: [192.168.1.100]
+
+Randomly selected: UH_Service._uh._tcp.local.
+
+Connecting to ws://192.168.1.100:8080/...
+Connected!
+
+Receiving messages (Ctrl+C to stop):
+
+[12:34:56.789] Random: 123456
+[12:34:57.790] Random: 789012
+...
+```
+
 ## Known Limitations
 - No client tracking (by design)
 - No message replay/history
