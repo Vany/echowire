@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         private const val MAX_LOG_LINES = 100
     }
 
+    private lateinit var nameTextView: TextView
     private lateinit var connectionIndicator: TextView
     private lateinit var logTextView: TextView
     private lateinit var startButton: Button
@@ -69,6 +70,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        nameTextView = findViewById(R.id.nameTextView)
         connectionIndicator = findViewById(R.id.connectionIndicator)
         logTextView = findViewById(R.id.logTextView)
         startButton = findViewById(R.id.startButton)
@@ -210,6 +212,20 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
                 message
             }
             addLog("ERROR: $errorMsg")
+        }
+    }
+
+    override fun onConfigChanged(key: String, value: String?) {
+        runOnUiThread {
+            when (key) {
+                "name" -> {
+                    nameTextView.text = value ?: "UH Service"
+                    addLog("Config updated: name = $value")
+                }
+                else -> {
+                    addLog("Config updated: $key = $value")
+                }
+            }
         }
     }
 }

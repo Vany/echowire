@@ -39,15 +39,23 @@ Rust command-line client for discovering and connecting to UH services.
 }
 ```
 
+### Configuration System
+- Runtime configuration modifiable via WebSocket messages
+- Any client can send configuration commands (secure network assumed)
+- Message format: `{"configure": "variable", "value": "optional"}`
+  - If `value` is provided: sets the config and returns new value
+  - If `value` is omitted: returns current value
+- Response format: `{"configure": "variable", "value": "current_value"}`
+- Available configuration variables:
+  - `name`: Service name displayed on UI (default: "UH Service")
+
 ### User Interface
+- **Service Name**: Displays configurable service name (default: "UH Service")
+- **Connection Indicator**: Boolean display showing active client count > 0
 - **Log Window**: Scrollable text view showing:
   - Client connection/disconnection events
   - Generated random numbers sent
-- **Connection Indicator**: Boolean display showing active client count > 0
-
-### Configuration System
-- Internal configuration support (not exposed in UI yet)
-- Default values used for initial implementation
+  - Configuration changes
 
 ## CLI Client Requirements
 - Discovers all UH services via mDNS (`_uh._tcp.local.`)

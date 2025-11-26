@@ -190,3 +190,47 @@ Order matters for clean shutdown:
 3. Shutdown WebSocket server (closes connections)
 4. Notify listener
 
+## Configuration System
+
+### RuntimeConfig Class
+Thread-safe runtime configuration management with change notification.
+
+**Storage:**
+- `MutableMap<String, String>` for key-value storage
+- Synchronized access for thread safety
+- Default values initialized in constructor
+
+**Operations:**
+- `set(key, value)`: Sets value and notifies listeners, returns new value
+- `get(key)`: Returns current value or null if not exists
+- `addListener()/removeListener()`: Observer pattern for change notifications
+
+**WebSocket Integration:**
+- `processConfigureMessage(json)`: Parses configure messages, processes set/get, returns response JSON
+- Message format: `{"configure": "key", "value": "optional"}`
+- Response format: `{"configure": "key", "value": "current_value"}`
+- If value provided: sets then returns new value
+- If value omitted: returns current value only
+- Returns null for invalid/unknown keys
+
+**Configuration Variables:**
+- `name`: Service name displayed on UI (default: "UH Service")
+
+**Flow:**
+1. Client sends configure message via WebSocket
+2. UhWebSocketServer.onMessage() receives message
+3. RuntimeConfig.processConfigureMessage() parses and processes
+4. If set operation: notifies listeners via ConfigChangeListener
+5. Response sent back to requesting client only
+6. UI updates via ServiceListener.onConfigChanged() callback
+
+**Thread Safety:**
+- All config access synchronized
+- Listeners notified on calling thread (WebSocket thread)
+- UI updates handled via runOnUiThread() in MainActivity
+
+**Future Extensions:**
+- Persistence: Save to SharedPreferences
+- Validation: Type checking, value constraints
+- More config variables: intervals, thresholds, etc.
+

@@ -7,6 +7,17 @@
     android:padding="16dp">
 
     <TextView
+        android:id="@+id/nameTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/default_service_name"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:padding="8dp"
+        android:textColor="@color/black" />
+
+    <TextView
         android:id="@+id/connectionIndicator"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

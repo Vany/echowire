@@ -38,7 +38,16 @@
 - [ ] Verify mDNS discovery
 - [ ] Test multi-client connections
 
-## Phase 6: CLI Client (uhcli)
+## Phase 6: Configuration System
+- [x] Create RuntimeConfig class for thread-safe mutable configuration
+- [x] Integrate RuntimeConfig with WebSocket server
+- [x] Handle configure messages (set/get operations)
+- [x] Add "name" configuration variable
+- [x] Update UI to display configurable name
+- [x] Add config change notifications to ServiceListener
+- [x] Document configuration system in SPEC.md and CLAUDE.md
+
+## Phase 7: CLI Client (uhcli)
 - [x] Create Rust project structure
 - [x] Implement mDNS service discovery
 - [x] Implement service listing

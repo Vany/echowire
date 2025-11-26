@@ -10,9 +10,11 @@ import java.nio.ByteBuffer
 /**
  * WebSocket server implementation for broadcasting messages to multiple clients.
  * Runs on specified port, accepts all connections, broadcasts to all without tracking.
+ * Handles configuration messages from clients.
  */
 class UhWebSocketServer(
     port: Int,
+    private val runtimeConfig: RuntimeConfig,
     private val onClientConnect: (String) -> Unit,
     private val onClientDisconnect: (String) -> Unit,
     private val onError: (Exception) -> Unit
@@ -43,8 +45,18 @@ class UhWebSocketServer(
     }
 
     override fun onMessage(conn: WebSocket, message: String) {
-        // We don't expect messages from clients, just log them
         Log.d(TAG, "Received message from ${conn.remoteSocketAddress}: $message")
+        
+        // Process configure messages
+        val response = runtimeConfig.processConfigureMessage(message)
+        if (response != null) {
+            try {
+                conn.send(response)
+                Log.d(TAG, "Sent config response: $response")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to send config response", e)
+            }
+        }
     }
 
     override fun onError(conn: WebSocket?, ex: Exception) {

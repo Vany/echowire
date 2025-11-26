@@ -45,6 +45,7 @@ class UhService : Service() {
         fun onClientDisconnected(address: String, totalClients: Int)
         fun onRandomNumberGenerated(value: Long, timestamp: Long)
         fun onError(message: String, exception: Exception?)
+        fun onConfigChanged(key: String, value: String?)
     }
 
     // Service binding
@@ -53,6 +54,7 @@ class UhService : Service() {
 
     // Configuration
     private val config: UhConfig = UhConfig.DEFAULT
+    private val runtimeConfig = RuntimeConfig()
 
     // WebSocket server
     private var webSocketServer: UhWebSocketServer? = null
@@ -80,6 +82,13 @@ class UhService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
+        
+        // Register config change listener
+        runtimeConfig.addListener(object : RuntimeConfig.ConfigChangeListener {
+            override fun onConfigChanged(key: String, value: String?) {
+                listener?.onConfigChanged(key, value)
+            }
+        })
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -174,6 +183,7 @@ class UhService : Service() {
 
             webSocketServer = UhWebSocketServer(
                 port = serverPort,
+                runtimeConfig = runtimeConfig,
                 onClientConnect = { address ->
                     val count = webSocketServer?.getClientCount() ?: 0
                     listener?.onClientConnected(address, count)
