@@ -6,7 +6,7 @@ package com.uh
  * Future: expose via UI, load from preferences/file.
  */
 data class UhConfig(
-    val mdnsServiceType: String = "_uh._tcp.local.",
+    val mdnsServiceType: String = "_uh._tcp.",
     val mdnsServiceName: String = "UH_Service",
     val websocketStartPort: Int = 8080,
     val websocketMaxPortSearch: Int = 100,

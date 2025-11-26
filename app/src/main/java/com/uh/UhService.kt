@@ -5,9 +5,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.IBinder
 import android.util.Log
@@ -59,6 +61,7 @@ class UhService : Service() {
     // mDNS registration
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     // Scheduled tasks
     private var scheduler: ScheduledExecutorService? = null
@@ -219,6 +222,19 @@ class UhService : Service() {
 
     private fun registerMdnsService() {
         try {
+            // Check if WiFi is connected
+            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            if (!wifiManager.isWifiEnabled) {
+                Log.w(TAG, "WiFi is not enabled, mDNS registration may fail")
+            }
+            
+            // Acquire multicast lock (required for mDNS on WiFi)
+            multicastLock = wifiManager.createMulticastLock("UhService_mDNS").apply {
+                setReferenceCounted(true)
+                acquire()
+            }
+            Log.d(TAG, "Multicast lock acquired")
+            
             nsdManager = getSystemService(NsdManager::class.java)
             
             val serviceInfo = NsdServiceInfo().apply {
@@ -226,11 +242,19 @@ class UhService : Service() {
                 serviceType = config.mdnsServiceType
                 port = serverPort
             }
+            
+            Log.d(TAG, "Attempting mDNS registration: name=${serviceInfo.serviceName}, type=${serviceInfo.serviceType}, port=${serviceInfo.port}")
 
             registrationListener = object : NsdManager.RegistrationListener {
                 override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    Log.e(TAG, "mDNS registration failed: $errorCode")
-                    listener?.onError("mDNS registration failed", null)
+                    val errorMsg = when (errorCode) {
+                        NsdManager.FAILURE_ALREADY_ACTIVE -> "Service already registered"
+                        NsdManager.FAILURE_INTERNAL_ERROR -> "Internal error"
+                        NsdManager.FAILURE_MAX_LIMIT -> "Max registrations reached"
+                        else -> "Unknown error code: $errorCode"
+                    }
+                    Log.e(TAG, "mDNS registration failed: $errorMsg")
+                    listener?.onError("mDNS registration failed: $errorMsg", null)
                 }
 
                 override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
@@ -254,7 +278,7 @@ class UhService : Service() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register mDNS service", e)
-            listener?.onError("mDNS registration error", e)
+            listener?.onError("mDNS registration error: ${e.message}", e)
         }
     }
 
@@ -265,6 +289,16 @@ class UhService : Service() {
             }
             registrationListener = null
             nsdManager = null
+            
+            // Release multicast lock
+            multicastLock?.let { lock ->
+                if (lock.isHeld) {
+                    lock.release()
+                    Log.d(TAG, "Multicast lock released")
+                }
+            }
+            multicastLock = null
+            
             Log.i(TAG, "mDNS service unregistered")
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering mDNS service", e)
