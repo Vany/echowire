@@ -1273,16 +1273,516 @@ make logs | grep -E "(Audio|Speech|Listening)"
 - [ ] Test audio capture without recognition (verify levels)
 
 ## Phase 4: Speech Recognition Integration
+
+### 4.1 Audio Preprocessing - Mel Spectrogram Generation
+**Purpose:** Convert raw PCM audio samples to mel spectrogram features for Whisper
+
+**Location:** Create `app/src/main/java/com/uh/audio/AudioPreprocessor.kt`
+
+**Requirements:**
+- Input: 16kHz mono PCM samples (ShortArray from AudioCaptureManager)
+- Output: Mel spectrogram (80 mel bins × N time frames)
+- Window: 25ms (400 samples at 16kHz)
+- Hop: 10ms (160 samples at 16kHz)
+- FFT size: 512 or 1024
+- Mel filter banks: 80 bins (Whisper standard)
+- Normalization: Log mel scale, normalized to [-1, 1]
+
+**Implementation:**
+```kotlin
+class AudioPreprocessor {
+    companion object {
+        const val SAMPLE_RATE = 16000
+        const val N_FFT = 512
+        const val HOP_LENGTH = 160  // 10ms
+        const val WIN_LENGTH = 400  // 25ms
+        const val N_MELS = 80       // Whisper standard
+    }
+    
+    fun pcmToMelSpectrogram(pcmSamples: ShortArray): Array<FloatArray> {
+        // 1. Convert ShortArray to FloatArray and normalize to [-1, 1]
+        // 2. Apply Hamming window
+        // 3. Compute STFT (Short-Time Fourier Transform)
+        // 4. Convert to power spectrogram
+        // 5. Apply mel filter banks
+        // 6. Convert to log scale
+        // 7. Normalize
+    }
+}
+```
+
+**Libraries to consider:**
+- JTransforms (FFT library for Java/Kotlin)
+- Or implement simple FFT with cooley-tukey algorithm
+- Or use TFLite Audio library (has mel spectrogram support)
+
+**Checklist:**
+- [ ] Add JTransforms dependency or implement FFT
+- [ ] Create AudioPreprocessor class
+- [ ] Implement Hamming window
+- [ ] Implement STFT computation
+- [ ] Create mel filter banks (80 bins, 16kHz)
+- [ ] Implement mel spectrogram pipeline
+- [ ] Add unit tests with known audio samples
+- [ ] Verify output matches Python librosa/torchaudio
+
+---
+
+### 4.2 TFLite Model Loading and Initialization
+**Purpose:** Load Whisper TFLite model and configure interpreter
+
+**Location:** Create `app/src/main/java/com/uh/ml/WhisperModel.kt`
+
+**Requirements:**
+- Load .tflite file from models/ directory
+- Configure TFLite interpreter with GPU delegate
+- Fallback to XNNPack (CPU) if GPU fails
+- Thread-safe model access
+- Model lifecycle management
+
+**Implementation:**
+```kotlin
+class WhisperModel(private val context: Context, private val modelPath: File) {
+    private var interpreter: Interpreter? = null
+    private val interpreterLock = ReentrantLock()
+    
+    // Input/output tensor info
+    data class TensorInfo(
+        val shape: IntArray,
+        val dataType: DataType
+    )
+    
+    fun load() {
+        // 1. Read .tflite file
+        // 2. Create interpreter options
+        // 3. Add GPU delegate (primary)
+        // 4. Add XNNPack delegate (fallback)
+        // 5. Create interpreter
+        // 6. Allocate tensors
+    }
+    
+    fun getInputTensorInfo(): TensorInfo
+    fun getOutputTensorInfo(): TensorInfo
+    
+    fun runInference(inputFeatures: Array<FloatArray>): FloatArray {
+        // Thread-safe inference
+    }
+    
+    fun close()
+}
+```
+
+**TFLite Configuration:**
+```kotlin
+val options = Interpreter.Options().apply {
+    // Try GPU first (Mali-G77)
+    try {
+        val gpuDelegate = GpuDelegate(
+            GpuDelegate.Options().apply {
+                setPrecisionLossAllowed(true)  // Allow FP16 for speed
+                setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED)
+            }
+        )
+        addDelegate(gpuDelegate)
+        Log.i(TAG, "GPU delegate added successfully")
+    } catch (e: Exception) {
+        Log.w(TAG, "GPU delegate failed, falling back to CPU", e)
+    }
+    
+    // XNNPack for ARM CPU optimization
+    setUseXNNPACK(true)
+    
+    // Thread count for CPU inference
+    setNumThreads(4)
+}
+```
+
+**Checklist:**
+- [ ] Add TFLite dependencies to build.gradle.kts
+- [ ] Create WhisperModel class
+- [ ] Implement model loading from file
+- [ ] Configure GPU delegate with error handling
+- [ ] Configure XNNPack delegate
+- [ ] Implement thread-safe inference wrapper
+- [ ] Add model lifecycle (load/close)
+- [ ] Test with dummy input (zeros)
+- [ ] Verify GPU delegate is actually used (check logs)
+
+---
+
+### 4.3 Whisper Inference Pipeline
+**Purpose:** Run mel spectrogram through Whisper model and get token predictions
+
+**Location:** Update `app/src/main/java/com/uh/ml/WhisperModel.kt`
+
+**Requirements:**
+- Input: Mel spectrogram (80 × N frames)
+- Output: Token sequence (logits or token IDs)
+- Handle variable-length audio (up to 30 seconds)
+- Efficient tensor manipulation
+- Memory management (reuse buffers)
+
+**Whisper Model I/O:**
+```
+Input shape:  [1, 80, 3000]  // batch=1, mels=80, frames=3000 (30 sec max)
+Output shape: [1, 448, 51865] // batch=1, sequence=448, vocab=51865 (logits)
+              OR
+              [1, 448]         // batch=1, sequence=448 (token IDs if argmax applied)
+```
+
+**Implementation:**
+```kotlin
+fun runInference(melSpectrogram: Array<FloatArray>): IntArray {
+    interpreterLock.withLock {
+        // 1. Prepare input tensor (reshape, pad if needed)
+        val inputTensor = prepareInputTensor(melSpectrogram)
+        
+        // 2. Allocate output tensor
+        val outputTensor = allocateOutputTensor()
+        
+        // 3. Run inference
+        interpreter?.run(inputTensor, outputTensor)
+        
+        // 4. Extract token IDs (argmax over vocab dimension)
+        return extractTokenIds(outputTensor)
+    }
+}
+
+private fun prepareInputTensor(mel: Array<FloatArray>): Array<Array<FloatArray>> {
+    // Reshape to [1, 80, frames]
+    // Pad to 3000 frames if shorter
+    // Truncate if longer (or process in chunks)
+}
+
+private fun extractTokenIds(logits: Array<Array<FloatArray>>): IntArray {
+    // Apply argmax over vocab dimension
+    // Return sequence of token IDs
+}
+```
+
+**Checklist:**
+- [ ] Implement input tensor preparation (reshaping, padding)
+- [ ] Implement output tensor extraction
+- [ ] Add argmax operation for token ID extraction
+- [ ] Handle variable-length audio (padding/truncating)
+- [ ] Optimize tensor operations (avoid allocations)
+- [ ] Add inference timing measurement
+- [ ] Test with sample mel spectrogram
+- [ ] Verify output shape matches expectations
+
+---
+
+### 4.4 Token Decoding - Converting Token IDs to Text
+**Purpose:** Convert Whisper token sequence to human-readable text
+
+**Location:** Create `app/src/main/java/com/uh/ml/WhisperTokenizer.kt`
+
+**Requirements:**
+- Load vocabulary from tokenizer file
+- Decode token IDs to text
+- Handle special tokens (start, end, language, timestamp)
+- UTF-8 encoding support
+- Language detection (if multilingual model)
+
+**Whisper Special Tokens:**
+```
+<|startoftranscript|>  : 50258
+<|en|>                 : 50259  (English)
+<|ru|>                 : 50304  (Russian)
+<|notimestamps|>       : 50363
+<|endoftext|>          : 50257
+```
+
+**Implementation:**
+```kotlin
+class WhisperTokenizer(private val vocabFile: File) {
+    private val tokenToText: Map<Int, String> by lazy {
+        loadVocabulary()
+    }
+    
+    private fun loadVocabulary(): Map<Int, String> {
+        // Load from JSON or text file
+        // Format: token_id -> text string
+    }
+    
+    fun decode(tokenIds: IntArray, skipSpecialTokens: Boolean = true): String {
+        val textParts = mutableListOf<String>()
+        
+        for (tokenId in tokenIds) {
+            // Skip special tokens if requested
+            if (skipSpecialTokens && isSpecialToken(tokenId)) {
+                continue
+            }
+            
+            // Get text for token
+            val text = tokenToText[tokenId] ?: continue
+            textParts.add(text)
+        }
+        
+        // Join and clean up
+        return textParts.joinToString("").trim()
+    }
+    
+    fun detectLanguage(tokenIds: IntArray): String? {
+        // Check for language tokens in first few positions
+        // Return "en", "ru", etc.
+    }
+    
+    private fun isSpecialToken(tokenId: Int): Boolean {
+        return tokenId in 50257..50363
+    }
+}
+```
+
+**Checklist:**
+- [ ] Download Whisper vocabulary file (vocab.json or similar)
+- [ ] Create WhisperTokenizer class
+- [ ] Implement vocabulary loading
+- [ ] Implement token decoding
+- [ ] Handle UTF-8 properly
+- [ ] Implement language detection
+- [ ] Handle special tokens
+- [ ] Add unit tests with known token sequences
+- [ ] Test with Russian and English text
+
+---
+
+### 4.5 SpeechRecognitionManager - Orchestration
+**Purpose:** High-level API for continuous speech recognition
+
+**Location:** Create `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt`
+
+**Requirements:**
+- Integrate AudioCaptureManager, AudioPreprocessor, WhisperModel, WhisperTokenizer
+- Buffer management (accumulate audio chunks)
+- Trigger inference on VAD detection
+- Progressive/streaming transcription
+- Thread management (audio thread, inference thread)
+- Error handling and recovery
+
+**Architecture:**
+```kotlin
+class SpeechRecognitionManager(
+    private val context: Context,
+    private val modelPath: File,
+    private val vocabPath: File
+) {
+    private val audioPreprocessor = AudioPreprocessor()
+    private val whisperModel = WhisperModel(context, modelPath)
+    private val tokenizer = WhisperTokenizer(vocabPath)
+    
+    private val audioBuffer = CircularAudioBuffer(capacity = 30 * 16000)  // 30 sec
+    private val inferenceExecutor = Executors.newSingleThreadExecutor()
+    
+    interface RecognitionListener {
+        fun onTranscription(text: String, startTime: Long, endTime: Long, confidence: Float)
+        fun onError(error: Exception)
+    }
+    
+    private var listener: RecognitionListener? = null
+    
+    fun initialize() {
+        whisperModel.load()
+    }
+    
+    fun onAudioData(samples: ShortArray, timestamp: Long, isSpeech: Boolean) {
+        // 1. Add to buffer
+        audioBuffer.add(samples, timestamp)
+        
+        // 2. If speech detected and buffer has enough data
+        if (isSpeech && audioBuffer.durationSeconds() >= MIN_AUDIO_DURATION) {
+            // Trigger inference on background thread
+            inferenceExecutor.submit {
+                processBuffer()
+            }
+        }
+    }
+    
+    private fun processBuffer() {
+        try {
+            // 1. Get audio from buffer
+            val audioChunk = audioBuffer.getAll()
+            
+            // 2. Preprocessing
+            val melSpec = audioPreprocessor.pcmToMelSpectrogram(audioChunk)
+            
+            // 3. Inference
+            val tokenIds = whisperModel.runInference(melSpec)
+            
+            // 4. Decoding
+            val text = tokenizer.decode(tokenIds)
+            val language = tokenizer.detectLanguage(tokenIds)
+            
+            // 5. Notify listener
+            listener?.onTranscription(
+                text = text,
+                startTime = audioBuffer.startTimestamp,
+                endTime = audioBuffer.endTimestamp,
+                confidence = 0.9f  // TODO: Extract from logits
+            )
+            
+            // 6. Clear buffer for next segment
+            audioBuffer.clear()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Inference failed", e)
+            listener?.onError(e)
+        }
+    }
+    
+    fun release() {
+        inferenceExecutor.shutdown()
+        whisperModel.close()
+    }
+}
+```
+
+**Checklist:**
+- [ ] Create CircularAudioBuffer for accumulating samples
 - [ ] Create SpeechRecognitionManager class
-  - [ ] WhisperKit initialization with base model
-  - [ ] Audio data feeding (from AudioCaptureManager)
-  - [ ] Streaming transcription (progressive segments)
-  - [ ] Confidence score extraction
-  - [ ] Timestamp tracking (segment start/end)
-  - [ ] Error handling and recovery
-- [ ] Test recognition pipeline (audio → text)
-- [ ] Optimize for real-time performance (<500ms latency)
-- [ ] Profile memory usage (target <2GB)
+- [ ] Implement audio buffering logic
+- [ ] Implement inference triggering (VAD-based)
+- [ ] Integrate all components (preprocessor, model, tokenizer)
+- [ ] Add thread management (separate inference thread)
+- [ ] Implement RecognitionListener callbacks
+- [ ] Add confidence score extraction (from logits)
+- [ ] Add error handling and recovery
+- [ ] Test with live audio from AudioCaptureManager
+- [ ] Measure end-to-end latency
+
+---
+
+### 4.6 Integration with UhService
+**Purpose:** Connect SpeechRecognitionManager to existing service
+
+**Location:** Update `app/src/main/java/com/uh/UhService.kt`
+
+**Changes:**
+```kotlin
+class UhService : Service() {
+    // Existing fields
+    private lateinit var audioCaptureManager: AudioCaptureManager
+    private lateinit var vad: SimpleVAD
+    
+    // NEW: Speech recognition
+    private lateinit var speechRecognitionManager: SpeechRecognitionManager
+    
+    private fun initializeAudioCapture() {
+        // Existing audio capture setup
+        
+        // NEW: Initialize speech recognition
+        val whisperModelPath = File(filesDir, "models/whisper/tiny.tflite")
+        val vocabPath = File(filesDir, "models/whisper/vocab.json")
+        
+        speechRecognitionManager = SpeechRecognitionManager(
+            context = this,
+            modelPath = whisperModelPath,
+            vocabPath = vocabPath
+        ).apply {
+            initialize()
+            setListener(object : SpeechRecognitionManager.RecognitionListener {
+                override fun onTranscription(text: String, startTime: Long, endTime: Long, confidence: Float) {
+                    handleTranscription(text, startTime, endTime, confidence)
+                }
+                
+                override fun onError(error: Exception) {
+                    Log.e(TAG, "Speech recognition error", error)
+                    listener?.onError("Recognition error: ${error.message}")
+                }
+            })
+        }
+    }
+    
+    private val audioDataListener = object : AudioCaptureManager.AudioDataListener {
+        override fun onAudioData(audioData: ShortArray, sampleRate: Int, timestamp: Long) {
+            val level = audioCaptureManager.getCurrentAudioLevel()
+            val isSpeech = vad.processFrame(level)
+            
+            // NEW: Feed to speech recognition
+            speechRecognitionManager.onAudioData(audioData, timestamp, isSpeech)
+            
+            if (isSpeech) {
+                Log.d(TAG, "Speech detected: level=$level, samples=${audioData.size}")
+            }
+        }
+        
+        override fun onAudioLevel(level: Float) {
+            listener?.onAudioLevelChanged(level)
+        }
+        
+        override fun onError(error: Exception) {
+            Log.e(TAG, "Audio capture error", error)
+            listener?.onError("Audio error: ${error.message}")
+        }
+    }
+    
+    private fun handleTranscription(text: String, startTime: Long, endTime: Long, confidence: Float) {
+        Log.i(TAG, "Transcription: \"$text\" (${endTime - startTime}ms, conf=$confidence)")
+        
+        // TODO Phase 5: Generate embedding
+        // TODO Phase 6: Broadcast via WebSocket
+        
+        // For now, just notify listener
+        listener?.onTranscriptionReceived(text)
+    }
+}
+```
+
+**Checklist:**
+- [ ] Add SpeechRecognitionManager field to UhService
+- [ ] Initialize speech recognition in initializeAudioCapture()
+- [ ] Update AudioDataListener to feed speech recognition
+- [ ] Add handleTranscription() method
+- [ ] Add onTranscriptionReceived() to ServiceListener
+- [ ] Update MainActivity to display transcriptions
+- [ ] Test end-to-end pipeline (audio → text)
+- [ ] Measure and log latency at each stage
+- [ ] Profile memory usage
+
+---
+
+### 4.7 Performance Optimization and Testing
+**Purpose:** Ensure real-time performance and stability
+
+**Tasks:**
+- [ ] Measure latency at each stage:
+  - Audio capture → preprocessing: target <50ms
+  - Preprocessing → inference: target <300ms
+  - Inference → decoding: target <50ms
+  - Total: target <500ms
+- [ ] Profile memory usage:
+  - Model size in memory
+  - Buffer allocations
+  - Tensor allocations
+  - Target: <2GB total
+- [ ] Test GPU delegate activation:
+  - Check logs for "GPU delegate added successfully"
+  - Measure inference time with/without GPU
+  - Verify 2-3x speedup with GPU
+- [ ] Test with various audio conditions:
+  - Clear speech
+  - Background noise
+  - Multiple speakers
+  - Different volumes
+- [ ] Test multilingual (English and Russian)
+- [ ] Long-running stability test (1+ hour)
+- [ ] Memory leak detection
+- [ ] CPU/battery usage profiling
+
+---
+
+**Phase 4 Summary:**
+```
+4.1: AudioPreprocessor (PCM → mel spectrogram)
+4.2: WhisperModel (TFLite loading, GPU delegate)
+4.3: Inference pipeline (mel → tokens)
+4.4: WhisperTokenizer (tokens → text)
+4.5: SpeechRecognitionManager (orchestration)
+4.6: UhService integration
+4.7: Performance optimization
+```
+
+**Next Phase:** Phase 5 - Text Embedding Generation (after 4.1-4.7 complete)
 
 ## Phase 5: Text Embedding Generation
 - [ ] Create EmbeddingManager class
