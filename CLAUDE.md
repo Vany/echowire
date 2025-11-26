@@ -272,11 +272,19 @@ Thread-safe runtime configuration management with change notification.
 
 **Flow:**
 1. Client sends configure message via WebSocket
-2. UhWebSocketServer.onMessage() receives message
+2. UhWebSocketServer.onMessage() receives message on WebSocket thread
 3. RuntimeConfig.processConfigureMessage() parses and processes
 4. If set operation: notifies listeners via ConfigChangeListener
 5. Response sent back to requesting client only
-6. UI updates via ServiceListener.onConfigChanged() callback
+6. UhService forwards config changes to ServiceListener on WebSocket thread
+7. MainActivity.onConfigChanged() receives callback on WebSocket thread
+8. UI updates via runOnUiThread() in MainActivity
+
+**Initial Config Reading:**
+- MainActivity reads current config when binding to service
+- UhService.getConfigValue(key) exposes RuntimeConfig.get(key)
+- Ensures UI shows current config even if MainActivity binds after config changes
+- Called in onServiceConnected() to sync UI with service state
 
 **Thread Safety:**
 - All config access synchronized

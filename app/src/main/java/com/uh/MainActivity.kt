@@ -47,6 +47,11 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             runOnUiThread {
                 updateConnectionIndicator(uhService?.getClientCount() ?: 0)
                 updateButtons(uhService?.isServiceRunning() ?: false)
+                
+                // Read current configuration
+                val currentName = uhService?.getConfigValue("name") ?: "UH Service"
+                nameTextView.text = currentName
+                
                 val port = uhService?.getServerPort() ?: 0
                 if (port > 0) {
                     addLog("Service bound - port $port")

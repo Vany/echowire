@@ -128,6 +128,10 @@ class UhService : Service() {
         return isRunning
     }
 
+    fun getConfigValue(key: String): String? {
+        return runtimeConfig.get(key)
+    }
+
     private fun startForegroundService() {
         createNotificationChannel()
         val notification = createNotification(0)
