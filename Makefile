@@ -1,4 +1,4 @@
-.PHONY: help clean build install uninstall logs logs-all retrieve-logs start-service stop-service cli-build cli-run cli-clean
+.PHONY: help models clean build install uninstall logs logs-all retrieve-logs start-service stop-service cli-build cli-run cli-clean
 
 # Java configuration - Gradle runs on Java 21, compiles with Java 25
 JAVA_21_HOME := /Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
@@ -17,6 +17,9 @@ CLI_BINARY := $(CLI_DIR)/target/release/uhcli
 help:
 	@echo "UH Android App - Makefile Targets"
 	@echo "=================================="
+	@echo "Setup:"
+	@echo "  models        - Download and convert ML models (required first time)"
+	@echo ""
 	@echo "Android App:"
 	@echo "  build         - Build debug APK"
 	@echo "  install       - Build and install to connected device"
@@ -32,6 +35,15 @@ help:
 	@echo "  cli-build     - Build uhcli (release mode)"
 	@echo "  cli-run       - Build and run uhcli"
 	@echo "  cli-clean     - Clean CLI build artifacts"
+
+models:
+	@echo "Downloading and converting ML models..."
+	@echo "This may take several minutes on first run."
+	@echo ""
+	@python3 scripts/download_convert_models.py --model tiny
+	@echo ""
+	@echo "Models are ready in ./models/"
+	@echo "You can now run: make install"
 
 clean:
 	@echo "Cleaning Android build artifacts..."

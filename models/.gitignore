@@ -1,0 +1,13 @@
+# Ignore all model files (large binaries)
+*.tflite
+*.onnx
+*.json
+*.bin
+*.pb
+*.txt
+
+# Keep this .gitignore
+!.gitignore
+
+# Keep README
+!README.md
