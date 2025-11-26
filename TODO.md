@@ -1937,7 +1937,35 @@ class SpeechRecognitionManager(
 
 ---
 
-### 4.6 Integration with UhService
+### 4.6 Integration with UhService ✅ DONE
+
+**Completed:**
+- ✅ Added SpeechRecognitionManager field to UhService
+- ✅ Initialize speech recognition in loadModels() after model extraction
+- ✅ Updated AudioDataListener to feed speech recognition manager
+- ✅ Added handleTranscription() method with RTF calculation
+- ✅ Added onTranscriptionReceived() to ServiceListener interface
+- ✅ Updated MainActivity to display transcriptions in log
+- ✅ Latency measurement and logging at each stage
+- ✅ Release SpeechRecognitionManager in stopAllComponents()
+
+**Implementation Details:**
+- SpeechRecognitionManager initialized in loadModels() coroutine
+- Model files: whisper_tiny.tflite, whisper_vocab.json
+- Recognition listener set up with onTranscription/onProcessingStarted/onError
+- Audio pipeline: AudioCaptureManager → VAD → SpeechRecognitionManager
+- handleTranscription() logs text, language, duration, processing time, RTF
+- MainActivity shows: "Speech [lang] (Xms): \"text\""
+- Clean resource cleanup on service stop
+
+**Real-Time Factor (RTF):**
+- RTF = processing_time / audio_duration
+- RTF < 1.0 = faster than real-time (good)
+- RTF = 1.0 = processes at real-time speed
+- RTF > 1.0 = slower than real-time (needs optimization)
+
+**Next:** Phase 4.7 - Performance testing (requires device testing)
+
 **Purpose:** Connect SpeechRecognitionManager to existing service
 
 **Location:** Update `app/src/main/java/com/uh/UhService.kt`
@@ -2014,15 +2042,15 @@ class UhService : Service() {
 ```
 
 **Checklist:**
-- [ ] Add SpeechRecognitionManager field to UhService
-- [ ] Initialize speech recognition in initializeAudioCapture()
-- [ ] Update AudioDataListener to feed speech recognition
-- [ ] Add handleTranscription() method
-- [ ] Add onTranscriptionReceived() to ServiceListener
-- [ ] Update MainActivity to display transcriptions
-- [ ] Test end-to-end pipeline (audio → text)
-- [ ] Measure and log latency at each stage
-- [ ] Profile memory usage
+- [x] Add SpeechRecognitionManager field to UhService
+- [x] Initialize speech recognition in loadModels()
+- [x] Update AudioDataListener to feed speech recognition
+- [x] Add handleTranscription() method
+- [x] Add onTranscriptionReceived() to ServiceListener
+- [x] Update MainActivity to display transcriptions
+- [ ] Test end-to-end pipeline (audio → text) - requires device testing
+- [x] Measure and log latency at each stage
+- [ ] Profile memory usage - requires device testing
 
 ---
 

@@ -317,4 +317,13 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             }
         }
     }
+    
+    // Speech recognition callbacks
+    
+    override fun onTranscriptionReceived(text: String, language: String?, processingTimeMs: Long) {
+        runOnUiThread {
+            val langLabel = language?.let { "[$it]" } ?: ""
+            addLog("Speech $langLabel (${processingTimeMs}ms): \"$text\"")
+        }
+    }
 }

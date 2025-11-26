@@ -20,6 +20,7 @@ import androidx.core.app.NotificationCompat
 import com.uh.audio.AudioCaptureManager
 import com.uh.audio.SimpleVAD
 import com.uh.ml.ModelManager
+import com.uh.ml.SpeechRecognitionManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -68,6 +69,9 @@ class UhService : Service() {
         // Audio capture callbacks
         fun onAudioLevelChanged(level: Float)
         fun onListeningStateChanged(listening: Boolean)
+        
+        // Speech recognition callbacks
+        fun onTranscriptionReceived(text: String, language: String?, processingTimeMs: Long)
     }
 
     // Service binding
@@ -88,6 +92,9 @@ class UhService : Service() {
     private var vad: SimpleVAD? = null
     @Volatile
     private var isListening: Boolean = false
+    
+    // Speech recognition
+    private var speechRecognitionManager: SpeechRecognitionManager? = null
 
     // WebSocket server
     private var webSocketServer: UhWebSocketServer? = null
@@ -194,8 +201,49 @@ class UhService : Service() {
             try {
                 listener?.onModelLoading("Loading models...")
                 
-                // TODO: Load Whisper model (Phase 4)
-                // loadWhisperModel()
+                // Initialize Whisper model and tokenizer paths
+                val whisperModelFile = File(filesDir, "models/whisper_tiny.tflite")
+                val vocabFile = File(filesDir, "models/whisper_vocab.json")
+                
+                if (!whisperModelFile.exists()) {
+                    throw IllegalStateException("Whisper model not found: ${whisperModelFile.absolutePath}")
+                }
+                if (!vocabFile.exists()) {
+                    throw IllegalStateException("Whisper vocab not found: ${vocabFile.absolutePath}")
+                }
+                
+                // Initialize SpeechRecognitionManager
+                speechRecognitionManager = SpeechRecognitionManager(
+                    context = this@UhService,
+                    modelFile = whisperModelFile,
+                    vocabFile = vocabFile
+                )
+                
+                // Load models (blocks until complete)
+                speechRecognitionManager?.initialize()
+                
+                // Set recognition listener
+                speechRecognitionManager?.setListener(object : SpeechRecognitionManager.RecognitionListener {
+                    override fun onTranscription(
+                        text: String,
+                        language: String?,
+                        startTime: Long,
+                        endTime: Long,
+                        processingTimeMs: Long
+                    ) {
+                        handleTranscription(text, language, startTime, endTime, processingTimeMs)
+                    }
+                    
+                    override fun onProcessingStarted() {
+                        Log.d(TAG, "Speech processing started")
+                    }
+                    
+                    override fun onError(error: Exception) {
+                        Log.e(TAG, "Speech recognition error", error)
+                        listener?.onError("Speech recognition error: ${error.message}", error)
+                    }
+                })
+                
                 modelManager.setWhisperLoaded(true)
                 
                 // TODO: Load embedding model (Phase 5)
@@ -592,17 +640,18 @@ class UhService : Service() {
         try {
             manager.startCapture(object : AudioCaptureManager.AudioDataListener {
                 override fun onAudioData(audioData: ShortArray, sampleRate: Int, timestamp: Long) {
-                    // TODO: Feed to speech recognition (Phase 4)
-                    // For now, just process with VAD
                     val currentVad = vad
-                    if (currentVad != null) {
+                    val recognitionManager = speechRecognitionManager
+                    
+                    if (currentVad != null && recognitionManager != null) {
                         val level = manager.getCurrentAudioLevel()
                         val isSpeech = currentVad.processFrame(level)
                         
+                        // Feed audio to speech recognition manager
+                        recognitionManager.onAudioData(audioData, timestamp, isSpeech)
+                        
                         if (isSpeech) {
-                            // Log speech detection for testing
-                            // Will be replaced with actual speech recognition
-                            Log.d(TAG, "Speech detected: level=$level, samples=${audioData.size}")
+                            Log.d(TAG, "Speech detected: level=$level, buffer=${recognitionManager.getBufferDuration()}s")
                         }
                     }
                 }
@@ -646,6 +695,41 @@ class UhService : Service() {
             Log.e(TAG, "Error stopping listening", e)
         }
     }
+    
+    /**
+     * Handle transcription results from SpeechRecognitionManager.
+     * Logs the result and notifies listener for UI updates.
+     * 
+     * @param text Recognized text
+     * @param language Detected language code (e.g., "en", "ru")
+     * @param startTime Audio start timestamp
+     * @param endTime Audio end timestamp
+     * @param processingTimeMs Time taken to process
+     */
+    private fun handleTranscription(
+        text: String,
+        language: String?,
+        startTime: Long,
+        endTime: Long,
+        processingTimeMs: Long
+    ) {
+        val audioDurationMs = endTime - startTime
+        val rtf = processingTimeMs.toFloat() / audioDurationMs.toFloat()
+        
+        Log.i(TAG, "Transcription: \"$text\"")
+        Log.i(TAG, "  Language: $language")
+        Log.i(TAG, "  Audio duration: ${audioDurationMs}ms")
+        Log.i(TAG, "  Processing time: ${processingTimeMs}ms (RTF: ${"%.2f".format(rtf)})")
+        
+        // Notify listener for UI update
+        listener?.onTranscriptionReceived(text, language, processingTimeMs)
+        
+        // TODO Phase 5: Generate embedding from text
+        // val embedding = embeddingManager.generateEmbedding(text)
+        
+        // TODO Phase 6: Broadcast via WebSocket
+        // broadcastSpeechMessage(text, language, embedding, startTime, endTime)
+    }
 
     private fun stopAllComponents() {
         // Stop audio capture
@@ -653,6 +737,10 @@ class UhService : Service() {
         audioCaptureManager?.release()
         audioCaptureManager = null
         vad = null
+        
+        // Release speech recognition
+        speechRecognitionManager?.release()
+        speechRecognitionManager = null
         
         // Stop scheduled tasks
         scheduler?.shutdown()
