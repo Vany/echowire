@@ -3,7 +3,6 @@ package com.uh.ml
 import android.content.Context
 import android.util.Log
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.File
 import java.io.FileInputStream
@@ -148,30 +147,26 @@ class WhisperModel(
     }
     
     /**
-     * Try to enable GPU delegate with device-specific optimization
+     * Try to enable GPU delegate with default settings
      * 
-     * Uses CompatibilityList to check device support and get optimized settings.
-     * Mali-G77 MP11 (Exynos 990) supports GPU acceleration with FP16 precision.
+     * Uses default GpuDelegate() constructor which works reliably.
+     * Mali-G77 MP11 (Exynos 990) supports GPU acceleration.
      * 
      * @return true if GPU delegate successfully added
      */
     private fun tryEnableGpu(options: Interpreter.Options): Boolean {
         return try {
-            val compatibilityList = CompatibilityList()
+            // Use default GPU delegate (no options to avoid classpath issues)
+            gpuDelegate = GpuDelegate()
+            options.addDelegate(gpuDelegate)
             
-            if (compatibilityList.isDelegateSupportedOnThisDevice) {
-                // Get best GPU delegate options for this device (Mali-G77)
-                val delegateOptions = compatibilityList.bestOptionsForThisDevice
-                gpuDelegate = GpuDelegate(delegateOptions)
-                options.addDelegate(gpuDelegate)
-                
-                Log.i(TAG, "GPU delegate enabled (Mali-G77 with FP16 precision)")
-                true
-            } else {
-                Log.w(TAG, "GPU delegate not supported on this device")
-                gpuDelegate = null
-                false
-            }
+            Log.i(TAG, "GPU delegate enabled (Mali-G77)")
+            true
+            
+        } catch (e: UnsatisfiedLinkError) {
+            Log.w(TAG, "GPU delegate native libraries not available", e)
+            gpuDelegate = null
+            false
         } catch (e: Exception) {
             Log.w(TAG, "Failed to enable GPU delegate: ${e.message}", e)
             gpuDelegate = null
