@@ -17,7 +17,15 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.uh.ml.ModelManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
 import java.net.ServerSocket
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -49,6 +57,11 @@ class UhService : Service() {
         fun onRandomNumberGenerated(value: Long, timestamp: Long)
         fun onError(message: String, exception: Exception?)
         fun onConfigChanged(key: String, value: String?)
+        
+        // Model management callbacks
+        fun onModelDownloadProgress(modelName: String, progress: Float, downloaded: Long, total: Long)
+        fun onModelLoading(status: String)
+        fun onModelLoaded(status: String)
     }
 
     // Service binding
@@ -58,6 +71,11 @@ class UhService : Service() {
     // Configuration
     private val config: UhConfig = UhConfig.DEFAULT
     private val runtimeConfig = RuntimeConfig()
+
+    // Model management
+    private lateinit var modelManager: ModelManager
+    private var modelDownloadJob: Job? = null
+    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
 
     // WebSocket server
     private var webSocketServer: UhWebSocketServer? = null
@@ -89,6 +107,9 @@ class UhService : Service() {
         super.onCreate()
         Log.d(TAG, "Service created")
         
+        // Initialize model manager
+        modelManager = ModelManager.getInstance(this)
+        
         // Register config change listener
         runtimeConfig.addListener(object : RuntimeConfig.ConfigChangeListener {
             override fun onConfigChanged(key: String, value: String?) {
@@ -100,16 +121,105 @@ class UhService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!isRunning) {
             startForegroundService()
-            startWebSocketServer()
-            startScheduledTasks()
+            initializeModels()
             isRunning = true
         }
         return START_STICKY
+    }
+    
+    /**
+     * Initialize models - extract from assets if needed, then load
+     */
+    private fun initializeModels() {
+        if (modelManager.areModelsExtracted()) {
+            Log.i(TAG, "Models already extracted, loading...")
+            loadModels()
+        } else {
+            Log.i(TAG, "Models not found, extracting from assets...")
+            extractModels()
+        }
+    }
+    
+    /**
+     * Extract all required models from bundled assets
+     */
+    private fun extractModels() {
+        modelDownloadJob = serviceScope.launch {
+            try {
+                val listener = object : ModelManager.ExtractionListener {
+                    override fun onProgress(modelName: String, progress: Float, extracted: Long, total: Long) {
+                        this@UhService.listener?.onModelDownloadProgress(modelName, progress, extracted, total)
+                    }
+                    
+                    override fun onComplete(modelName: String, file: File) {
+                        Log.i(TAG, "Model extracted: $modelName -> ${file.name} (${file.length()} bytes)")
+                    }
+                    
+                    override fun onError(modelName: String, error: Exception) {
+                        Log.e(TAG, "Model extraction failed: $modelName", error)
+                        this@UhService.listener?.onError("Model extraction failed: $modelName - ${error.message}", error)
+                    }
+                }
+                
+                modelManager.extractAllModels(listener)
+                Log.i(TAG, "All models extracted successfully")
+                
+                // Now load models
+                loadModels()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to extract models", e)
+                this@UhService.listener?.onError("Failed to extract models: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Load models into memory and start service components
+     */
+    private fun loadModels() {
+        serviceScope.launch {
+            try {
+                listener?.onModelLoading("Loading models...")
+                
+                // TODO: Load Whisper model (Phase 4)
+                // loadWhisperModel()
+                modelManager.setWhisperLoaded(true)
+                
+                // TODO: Load embedding model (Phase 5)
+                // loadEmbeddingModel()
+                modelManager.setEmbeddingLoaded(true)
+                
+                listener?.onModelLoaded("Models loaded successfully")
+                
+                // Now start WebSocket server and other components
+                startAllComponents()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load models", e)
+                listener?.onError("Failed to load models: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Start all service components after models are loaded
+     */
+    private fun startAllComponents() {
+        startWebSocketServer()
+        startScheduledTasks()
     }
 
     override fun onDestroy() {
         super.onDestroy()
         Log.d(TAG, "Service destroyed")
+        
+        // Cancel model download if in progress
+        modelDownloadJob?.cancel()
+        
+        // Cancel coroutine scope
+        serviceScope.cancel()
+        
         stopAllComponents()
         isRunning = false
     }
