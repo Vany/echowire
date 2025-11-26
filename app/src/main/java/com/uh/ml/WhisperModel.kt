@@ -3,6 +3,7 @@ package com.uh.ml
 import android.content.Context
 import android.util.Log
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.File
 import java.io.FileInputStream
@@ -147,40 +148,32 @@ class WhisperModel(
     }
     
     /**
-     * Try to enable GPU delegate
+     * Try to enable GPU delegate with device-specific optimization
      * 
-     * Note: GpuDelegateFactory.Options is not available in TFLite 2.14.0 classpath.
-     * We use direct GpuDelegate.Options() constructor and catch any missing class errors.
+     * Uses CompatibilityList to check device support and get optimized settings.
+     * Mali-G77 MP11 (Exynos 990) supports GPU acceleration with FP16 precision.
      * 
      * @return true if GPU delegate successfully added
      */
     private fun tryEnableGpu(options: Interpreter.Options): Boolean {
         return try {
-            // Create GPU delegate with default options
-            // If GPU classes are missing, this will throw NoClassDefFoundError
-            val gpuOptions = GpuDelegate.Options().apply {
-                // Enable FP16 precision (2x speedup, minimal accuracy loss)
-                setPrecisionLossAllowed(true)
-                // Prefer speed over accuracy
-                setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED)
+            val compatibilityList = CompatibilityList()
+            
+            if (compatibilityList.isDelegateSupportedOnThisDevice) {
+                // Get best GPU delegate options for this device (Mali-G77)
+                val delegateOptions = compatibilityList.bestOptionsForThisDevice
+                gpuDelegate = GpuDelegate(delegateOptions)
+                options.addDelegate(gpuDelegate)
+                
+                Log.i(TAG, "GPU delegate enabled (Mali-G77 with FP16 precision)")
+                true
+            } else {
+                Log.w(TAG, "GPU delegate not supported on this device")
+                gpuDelegate = null
+                false
             }
-            
-            gpuDelegate = GpuDelegate(gpuOptions)
-            options.addDelegate(gpuDelegate)
-            
-            Log.i(TAG, "GPU delegate enabled with FP16 precision")
-            true
-            
-        } catch (e: NoClassDefFoundError) {
-            Log.w(TAG, "GPU delegate classes not found (expected on some devices)", e)
-            gpuDelegate = null
-            false
-        } catch (e: UnsatisfiedLinkError) {
-            Log.w(TAG, "GPU delegate native libraries not available", e)
-            gpuDelegate = null
-            false
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to enable GPU delegate", e)
+            Log.w(TAG, "Failed to enable GPU delegate: ${e.message}", e)
             gpuDelegate = null
             false
         }
