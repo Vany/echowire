@@ -194,29 +194,35 @@ class ModelManager private constructor(private val context: Context) {
             val buffer = ByteArray(8192)
             var extracted = 0L
             var read: Int
-            var lastProgressReport = 0L
+            var lastProgressPercent = -1  // Track last reported percentage milestone
             
             while (input.read(buffer).also { read = it } != -1) {
                 output.write(buffer, 0, read)
                 extracted += read
                 
-                // Report progress every 100KB to avoid excessive UI updates
+                // Report progress at 25%, 50%, 75%, 100% milestones
                 if (totalBytes > 0) {
                     // Known file size - report percentage progress
-                    if (extracted - lastProgressReport > 100 * 1024 || extracted >= totalBytes) {
-                        val progress = extracted.toFloat() / totalBytes
+                    val progress = extracted.toFloat() / totalBytes
+                    val currentPercent = (progress * 100).toInt()
+                    val milestone = (currentPercent / 25) * 25  // Round down to nearest 25%
+                    
+                    if (milestone > lastProgressPercent || extracted >= totalBytes) {
                         withContext(Dispatchers.Main) {
                             listener?.onProgress(modelName, progress, extracted, totalBytes)
                         }
-                        lastProgressReport = extracted
+                        lastProgressPercent = milestone
                     }
                 } else {
-                    // Compressed file - report bytes extracted only (progress = 0.0)
-                    if (extracted - lastProgressReport > 100 * 1024) {
+                    // Compressed file - report every 5MB
+                    val megabytes = extracted / (1024 * 1024)
+                    val milestone = (megabytes / 5) * 5
+                    
+                    if (milestone > lastProgressPercent) {
                         withContext(Dispatchers.Main) {
                             listener?.onProgress(modelName, 0.0f, extracted, -1L)
                         }
-                        lastProgressReport = extracted
+                        lastProgressPercent = milestone.toInt()
                     }
                 }
             }
