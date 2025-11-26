@@ -409,6 +409,31 @@ fun onAudioData(samples: ShortArray, timestamp: Long, isSpeech: Boolean) {
 **Location:** `app/src/main/java/com/uh/ml/WhisperModel.kt`
 **Date:** 2024-11
 
+**CRITICAL BUG FIX (2024-11-26):**
+**Problem:** `NoClassDefFoundError: Failed resolution of: Lorg/tensorflow/lite/gpu/GpuDelegateFactory$Options`
+**Root Cause:** TFLite 2.14.0 requires using `CompatibilityList.bestOptionsForThisDevice` to create GPU delegate
+**Incorrect API:** `GpuDelegate()` (no options) - deprecated, causes runtime class loading failure
+**Correct API:** `GpuDelegate(compatibilityList.bestOptionsForThisDevice)` - includes necessary factory classes
+
+**Critical Code Pattern for TFLite 2.14.0+:**
+```kotlin
+val compatibilityList = CompatibilityList()
+if (compatibilityList.isDelegateSupportedOnThisDevice) {
+    // MUST use bestOptionsForThisDevice (not GpuDelegate() with no args)
+    val delegateOptions = compatibilityList.bestOptionsForThisDevice
+    gpuDelegate = GpuDelegate(delegateOptions)  // ✓ CORRECT
+    options.addDelegate(gpuDelegate)
+}
+
+// WRONG: gpuDelegate = GpuDelegate()  // ✗ Causes NoClassDefFoundError
+```
+
+**Why This Matters:**
+- `bestOptionsForThisDevice` provides `GpuDelegateFactory$Options` internally
+- Direct `GpuDelegate()` constructor doesn't include necessary factory classes
+- Fails at runtime even though code compiles (classes loaded dynamically)
+- Mali GPU optimization depends on proper options initialization
+
 **Purpose:**
 Manages Whisper TFLite model lifecycle with hardware acceleration (GPU/CPU) for real-time speech recognition.
 
