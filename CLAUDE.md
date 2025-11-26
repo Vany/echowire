@@ -160,6 +160,13 @@ uhcli [SUBCOMMAND]
 - Early return on critical failures (no services, connection failure)
 - Continue on non-critical errors (message parse errors)
 
+### IPv6 URL Formatting
+- IPv6 addresses in URLs require square brackets per RFC 3986
+- `format_address_for_url()` helper function handles both IPv4 and IPv6:
+  - IPv4: `192.168.1.100` → `ws://192.168.1.100:8080/`
+  - IPv6: `2a00:...` → `ws://[2a00:...]:8080/`
+- Applied to all WebSocket URL construction points (listen, set, get)
+
 ### Output Format
 ```
 UH CLI - WebSocket Random Number Client

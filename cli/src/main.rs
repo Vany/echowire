@@ -195,6 +195,14 @@ async fn discover_services() -> Result<Vec<UhService>> {
     Ok(services)
 }
 
+/// Format IP address for URL (IPv6 needs brackets).
+fn format_address_for_url(addr: &IpAddr) -> String {
+    match addr {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => format!("[{}]", v6),
+    }
+}
+
 /// Connect to selected service and listen to broadcast messages.
 async fn listen_to_service(service: &UhService) -> Result<()> {
     let address = service
@@ -202,7 +210,8 @@ async fn listen_to_service(service: &UhService) -> Result<()> {
         .first()
         .context("Service has no addresses")?;
 
-    let ws_url = format!("ws://{}:{}/", address, service.port);
+    let addr_str = format_address_for_url(address);
+    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
     println!("Connecting to {}...", ws_url);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
@@ -265,7 +274,8 @@ async fn send_configure_set(service: &UhService, key: &str, value: &str) -> Resu
         .first()
         .context("Service has no addresses")?;
 
-    let ws_url = format!("ws://{}:{}/", address, service.port);
+    let addr_str = format_address_for_url(address);
+    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
     println!("Connecting to {}...", ws_url);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
@@ -336,7 +346,8 @@ async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
         .first()
         .context("Service has no addresses")?;
 
-    let ws_url = format!("ws://{}:{}/", address, service.port);
+    let addr_str = format_address_for_url(address);
+    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
     println!("Connecting to {}...", ws_url);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
