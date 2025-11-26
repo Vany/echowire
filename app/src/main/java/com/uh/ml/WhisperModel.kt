@@ -3,7 +3,6 @@ package com.uh.ml
 import android.content.Context
 import android.util.Log
 import org.tensorflow.lite.Interpreter
-import org.tensorflow.lite.gpu.CompatibilityList
 import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.File
 import java.io.FileInputStream
@@ -134,16 +133,15 @@ class WhisperModel(
         
         // Try GPU delegate first (Mali-G77)
         if (tryEnableGpu(options)) {
-            Log.i(TAG, "GPU delegate enabled (Mali-G77)")
+            Log.i(TAG, "Hardware acceleration: GPU (Mali-G77) with FP16")
             isGpuEnabled = true
         } else {
-            Log.i(TAG, "GPU delegate unavailable, using CPU")
+            Log.i(TAG, "Hardware acceleration: CPU with XNNPack")
             isGpuEnabled = false
         }
         
         // Enable XNNPack for ARM CPU optimization (always beneficial)
         options.setUseXNNPACK(true)
-        Log.i(TAG, "XNNPack enabled for ARM NEON optimization")
         
         return options
     }
@@ -151,22 +149,36 @@ class WhisperModel(
     /**
      * Try to enable GPU delegate
      * 
+     * Note: GpuDelegateFactory.Options is not available in TFLite 2.14.0 classpath.
+     * We use direct GpuDelegate.Options() constructor and catch any missing class errors.
+     * 
      * @return true if GPU delegate successfully added
      */
     private fun tryEnableGpu(options: Interpreter.Options): Boolean {
         return try {
-            val compatibilityList = CompatibilityList()
-            
-            if (compatibilityList.isDelegateSupportedOnThisDevice) {
-                // Get best GPU delegate options for this device
-                val delegateOptions = compatibilityList.bestOptionsForThisDevice
-                gpuDelegate = GpuDelegate(delegateOptions)
-                options.addDelegate(gpuDelegate)
-                true
-            } else {
-                Log.w(TAG, "GPU delegate not supported on this device")
-                false
+            // Create GPU delegate with default options
+            // If GPU classes are missing, this will throw NoClassDefFoundError
+            val gpuOptions = GpuDelegate.Options().apply {
+                // Enable FP16 precision (2x speedup, minimal accuracy loss)
+                setPrecisionLossAllowed(true)
+                // Prefer speed over accuracy
+                setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED)
             }
+            
+            gpuDelegate = GpuDelegate(gpuOptions)
+            options.addDelegate(gpuDelegate)
+            
+            Log.i(TAG, "GPU delegate enabled with FP16 precision")
+            true
+            
+        } catch (e: NoClassDefFoundError) {
+            Log.w(TAG, "GPU delegate classes not found (expected on some devices)", e)
+            gpuDelegate = null
+            false
+        } catch (e: UnsatisfiedLinkError) {
+            Log.w(TAG, "GPU delegate native libraries not available", e)
+            gpuDelegate = null
+            false
         } catch (e: Exception) {
             Log.w(TAG, "Failed to enable GPU delegate", e)
             gpuDelegate = null

@@ -27,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CoroutineExceptionHandler
 import org.json.JSONObject
 import java.io.File
 import java.net.ServerSocket
@@ -85,7 +86,15 @@ class UhService : Service() {
     // Model management
     private lateinit var modelManager: ModelManager
     private var modelDownloadJob: Job? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    
+    // Coroutine exception handler for debugging
+    private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
+        Log.e(TAG, "UNCAUGHT COROUTINE EXCEPTION: ${exception.javaClass.simpleName}: ${exception.message}", exception)
+        exception.printStackTrace()
+        listener?.onError("Uncaught error: ${exception.message}", exception as? Exception)
+    }
+    
+    private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob() + exceptionHandler)
 
     // Audio capture
     private var audioCaptureManager: AudioCaptureManager? = null
@@ -199,11 +208,16 @@ class UhService : Service() {
     private fun loadModels() {
         serviceScope.launch {
             try {
+                Log.i(TAG, "Starting model loading...")
                 listener?.onModelLoading("Loading models...")
                 
                 // Get model file paths from ModelManager
                 val whisperModelFile = modelManager.whisperModelFile
                 val vocabFile = modelManager.whisperVocabFile
+                
+                Log.i(TAG, "Checking model files...")
+                Log.i(TAG, "  Whisper model: ${whisperModelFile.absolutePath} (exists: ${whisperModelFile.exists()}, size: ${whisperModelFile.length()} bytes)")
+                Log.i(TAG, "  Vocab file: ${vocabFile.absolutePath} (exists: ${vocabFile.exists()}, size: ${vocabFile.length()} bytes)")
                 
                 if (!whisperModelFile.exists()) {
                     throw IllegalStateException("Whisper model not found: ${whisperModelFile.absolutePath}")
@@ -212,6 +226,7 @@ class UhService : Service() {
                     throw IllegalStateException("Whisper vocab not found: ${vocabFile.absolutePath}")
                 }
                 
+                Log.i(TAG, "Creating SpeechRecognitionManager...")
                 // Initialize SpeechRecognitionManager
                 speechRecognitionManager = SpeechRecognitionManager(
                     context = this@UhService,
@@ -219,9 +234,11 @@ class UhService : Service() {
                     vocabFile = vocabFile
                 )
                 
+                Log.i(TAG, "Initializing models (this may take several seconds)...")
                 // Load models (blocks until complete)
                 speechRecognitionManager?.initialize()
                 
+                Log.i(TAG, "Models initialized successfully, setting up listener...")
                 // Set recognition listener
                 speechRecognitionManager?.setListener(object : SpeechRecognitionManager.RecognitionListener {
                     override fun onTranscription(
@@ -246,18 +263,28 @@ class UhService : Service() {
                 
                 modelManager.setWhisperLoaded(true)
                 
+                Log.i(TAG, "Whisper loaded, now loading embedding model...")
                 // TODO: Load embedding model (Phase 5)
                 // loadEmbeddingModel()
                 modelManager.setEmbeddingLoaded(true)
                 
+                Log.i(TAG, "All models loaded successfully!")
                 listener?.onModelLoaded("Models loaded successfully")
                 
                 // Now start WebSocket server and other components
+                Log.i(TAG, "Starting all components...")
                 startAllComponents()
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to load models", e)
+                Log.e(TAG, "CRITICAL: Failed to load models - ${e.javaClass.simpleName}: ${e.message}", e)
+                e.printStackTrace()
                 listener?.onError("Failed to load models: ${e.message}", e)
+                // Don't crash the service, but log prominently
+                Log.e(TAG, "Service will continue but speech recognition is NOT available")
+            } catch (e: Error) {
+                Log.e(TAG, "CRITICAL: Fatal error loading models - ${e.javaClass.simpleName}: ${e.message}", e)
+                e.printStackTrace()
+                listener?.onError("Fatal error loading models: ${e.message}", null)
             }
         }
     }
