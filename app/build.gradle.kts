@@ -81,4 +81,7 @@ dependencies {
     // Coroutines for async operations
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    
+    // FFT library for mel spectrogram generation
+    implementation("com.github.wendykierp:JTransforms:3.1")
 }

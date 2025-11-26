@@ -14,6 +14,8 @@ obj/
 # APK files
 *.apk
 
+cli/target
+
 # Model files (too large for git - download with scripts/download_models.sh)
 app/src/main/assets/models/*.tflite
 app/src/main/assets/models/*.onnx
