@@ -59,3 +59,6 @@ proguard-project.txt
 # Rust/Cargo
 cli/target/
 cli/Cargo.lock
+
+# Claude MCP tool bug reports
+BUG_REPORT_*.md
