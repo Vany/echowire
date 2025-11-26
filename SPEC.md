@@ -6,15 +6,15 @@ Android application that performs continuous on-device speech recognition, gener
 ## Architecture
 Real-time audio processing pipeline:
 ```
-Microphone → WhisperKit (Speech→Text) → Sentence-Embeddings (Text→Vector) → WebSocket Broadcast
+Microphone → TensorFlow Lite Whisper (Speech→Text) → ONNX Embeddings (Text→Vector) → WebSocket Broadcast
 ```
 
 ## Subprojects
 
 ### UH Android App (`/app`)
 Android application providing:
-- Continuous speech recognition (WhisperKit base/small model)
-- Text embedding generation (all-MiniLM-L6-v2, 384 dimensions)
+- Continuous speech recognition (TensorFlow Lite Whisper tiny/base/small model)
+- Text embedding generation (all-MiniLM-L6-v2 ONNX, 384 dimensions)
 - WebSocket server for streaming results
 - mDNS service advertisement
 
@@ -24,18 +24,26 @@ Rust command-line client for discovering and connecting to UH services, receivin
 ## Technical Requirements
 
 ### Speech Recognition
-- **Engine**: WhisperKit Android with Qualcomm QNN acceleration
-- **Model**: Base or Small (configurable, optimized for 8GB RAM)
+- **Engine**: TensorFlow Lite with Whisper ONNX-converted models
+- **Hardware Acceleration**: 
+  - GPU Delegate (Mali-G77 optimized)
+  - XNNPack for ARM CPU optimization
+  - NNAPI delegate for Samsung NPU (Exynos 990)
+- **Model**: Tiny (39MB), Base (74MB), or Small (244MB) - configurable
 - **Mode**: Continuous listening with Voice Activity Detection (VAD)
 - **Latency Target**: <500ms end-to-end (audio capture → broadcast)
-- **Languages**: English (primary), expandable to multilingual models
+- **Real-time Factor**: 0.2-0.3x with GPU delegate (1 sec audio → 200-300ms processing)
+- **Languages**: Multilingual (99 languages including English, Russian) with automatic detection
 - **Audio**: 16kHz mono, continuous capture while service running
+- **Preprocessing**: PCM audio → mel spectrogram (80 bins, 25ms window, 10ms hop)
 
 ### Text Embeddings
-- **Model**: all-MiniLM-L6-v2 (384 dimensions, 23MB)
-- **Framework**: ONNX Runtime via Sentence-Embeddings-Android
+- **Model**: all-MiniLM-L6-v2 (384 dimensions, 86MB ONNX format)
+- **Framework**: ONNX Runtime Android (Microsoft onnxruntime-android)
+- **Tokenization**: Rust-based HuggingFace tokenizers via JNI
 - **Purpose**: Semantic search, similarity matching, vector database ingestion
-- **Latency**: ~50ms per phrase
+- **Latency**: ~50ms per phrase on ARM CPU
+- **Pooling**: Mean pooling (SBERT standard)
 
 ### mDNS Service
 - Service type: `_uh._tcp.local.`
@@ -93,9 +101,9 @@ WebSocket ping frame (non-JSON)
 - Response format: `{"configure": "variable", "value": "current_value"}`
 - Available configuration variables:
   - `name`: Service name displayed on UI (default: "UH Speech Service")
-  - `model`: WhisperKit model selection ("tiny", "base", "small" - default: "base")
-  - `language`: Recognition language (default: "en")
-  - `vad_threshold`: Voice activity detection threshold 0.0-1.0 (default: 0.3)
+  - `model`: Whisper model selection ("tiny", "base", "small" - default: "tiny")
+  - `language`: Recognition language code or "auto" for detection (default: "auto")
+  - `vad_threshold`: Voice activity detection threshold 0.0-1.0 (default: 0.02)
   - `listening`: Enable/disable continuous listening ("true"/"false")
 
 ### User Interface
@@ -112,13 +120,18 @@ WebSocket ping frame (non-JSON)
   - Errors and warnings
 
 ### Model Management
-- **Initial Setup**: App downloads required models on first launch
-  - WhisperKit base model (~75MB)
-  - all-MiniLM-L6-v2 ONNX model (~23MB)
-  - Tokenizer configuration (~500KB)
-- **Storage**: Internal app storage (`/data/data/com.yourapp/files/models/`)
-- **Loading**: Models loaded when service starts (may take 5-10 seconds)
-- **Updates**: Support runtime model switching via configuration
+- **Bundling Strategy**: Models bundled in APK as assets (no network dependency)
+- **Models Included**:
+  - Whisper tiny multilingual TFLite: ~39MB (99 languages, built-in detection)
+  - all-MiniLM-L6-v2 ONNX: ~86MB (text embeddings)
+  - Tokenizer config: ~455KB (HuggingFace format)
+- **Total APK Size**: +177MB (acceptable for enterprise/testing use case)
+- **Storage**: Extracted from assets to internal storage on first run
+  - Location: `/data/data/com.uh/files/models/`
+  - Extraction: One-time, takes 2-5 seconds
+- **Loading**: Models loaded into memory when service starts (5-10 seconds)
+- **Runtime Switching**: Support model swapping via configuration (requires service restart)
+- **Benefits**: Instant availability, no download delays, no network errors
 
 ## CLI Client Requirements
 - Discovers all UH services via mDNS (`_uh._tcp.local.`)
@@ -169,31 +182,37 @@ uhcli get listening
 - Memory usage must stay under 2GB (plenty of headroom on 8GB device)
 - Wake lock keeps screen on while service running (line power assumption)
 
-## Performance Targets (8GB RAM, Snapdragon 8 Gen 2)
+## Performance Targets (Samsung Note20, Exynos 990, Mali-G77, 8GB RAM)
 - **Latency**: <500ms end-to-end (audio capture → WebSocket broadcast)
-- **Real-time Factor**: <0.5x (process 1 second of audio in <0.5 seconds)
+- **Real-time Factor**: <0.3x with GPU delegate (process 1 second audio in <300ms)
 - **Throughput**: Support 3+ simultaneous WebSocket clients without degradation
-- **Memory**: <2GB total (models + runtime)
-- **Model Loading**: <10 seconds initial load
+- **Memory**: <2GB total (models + runtime + buffers)
+- **Model Loading**: <10 seconds initial load (extraction + TFLite initialization)
 - **Audio Capture**: 16kHz mono, <100ms buffering
+- **GPU Acceleration**: Mali-G77 MP11 via TFLite GPU delegate
+- **CPU Fallback**: XNNPack ARM optimizations if GPU unavailable
+- **NPU Option**: Samsung NPU via NNAPI delegate (experimental)
 
 ## Security Considerations
 - **Network**: Assumed secure local network (no authentication/encryption)
 - **Configuration**: Any WebSocket client can modify configuration (intentional for testing)
 - **Audio Privacy**: Microphone access clearly indicated in UI and notification
-- **Model Integrity**: Models verified via checksum on download
+- **Model Integrity**: Models bundled in APK, verified by Android package signing
 
 ## Future Considerations
 - Speaker diarization (who is speaking)
-- Multiple language support (multilingual models)
+- Multiple model support (download additional base/small models on-demand)
 - Authentication/authorization for configuration changes
 - TLS/encryption for WebSocket connections
-- Model quantization for faster inference
+- FP16 quantization for 2x faster inference
+- INT8 quantization for 4x smaller models
 - Custom wake word detection
 - Audio recording and replay
 - Offline model training/fine-tuning on device
 - Vector database integration
 - CLI client service selection (non-random)
 - CLI client TUI interface with real-time updates
-- Model download progress in UI
+- Model extraction progress in UI
 - Error recovery and automatic reconnection
+- Vulkan GPU delegate (alternative to OpenGL)
+- Hexagon DSP acceleration (if Qualcomm hardware available)
