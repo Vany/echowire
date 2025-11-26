@@ -71,10 +71,32 @@ Ping: WebSocket frame-level ping (not JSON)
 - **tokio**: Async runtime with full features
 - **tokio-tungstenite**: WebSocket client (async, works with tokio)
 - **mdns-sd**: Pure Rust mDNS/DNS-SD implementation (cross-platform)
-- **serde/serde_json**: JSON deserialization for messages
+- **serde/serde_json**: JSON serialization/deserialization
 - **rand**: Random service selection
 - **anyhow**: Error handling with context
 - **chrono**: Timestamp formatting
+- **clap**: Command-line argument parsing with derive macros (v4)
+
+### CLI Architecture
+
+**Command Structure:**
+```
+uhcli [SUBCOMMAND]
+├── listen  - Listen to broadcast messages (default)
+├── set     - Set configuration value (key=value)
+└── get     - Get configuration value (key)
+```
+
+**Subcommands:**
+- `listen`: Default behavior, connects and displays random number broadcasts
+- `set key=value`: Sends configure message with value, waits for response, displays result
+- `get key`: Sends configure message without value, waits for response, displays result
+
+**Key Value Parsing:**
+- Accepts `key=value` format
+- Strips quotes from values: `name="My Device"` → `name=My Device`
+- Validates non-empty keys
+- Custom parser using `clap::value_parser`
 
 ### Architecture Decisions
 
@@ -97,10 +119,35 @@ Ping: WebSocket frame-level ping (not JSON)
 - Automatic pong responses to ping frames
 
 **Message Handling:**
-- Deserializes JSON to `RandomMessage` struct
-- Validates message type == "random"
+- Deserializes JSON to `RandomMessage` struct for random broadcasts
+- Deserializes JSON to `ConfigureResponse` struct for config responses
+- Validates message type == "random" for broadcasts
 - Formats timestamps as HH:MM:SS.mmm using chrono
 - Falls back to raw message display for parsing errors
+- Displays configure responses in listen mode
+
+**Configure Message Flow:**
+1. **Set Operation**: `uhcli set name=MyDevice`
+   - Discovers services, selects random
+   - Connects to WebSocket
+   - Sends: `{"configure":"name","value":"MyDevice"}`
+   - Waits for response (3s timeout)
+   - Displays: `Configuration updated: name = MyDevice`
+   - Closes connection
+
+2. **Get Operation**: `uhcli get name`
+   - Discovers services, selects random
+   - Connects to WebSocket
+   - Sends: `{"configure":"name"}`
+   - Waits for response (3s timeout)
+   - Displays: `Current configuration: name = MyDevice`
+   - Closes connection
+
+3. **Listen Operation**: `uhcli` or `uhcli listen`
+   - Discovers services, selects random
+   - Connects to WebSocket
+   - Displays all incoming messages (random numbers, config responses)
+   - Runs until Ctrl+C
 
 **Shutdown Handling:**
 - `tokio::signal::ctrl_c()` for graceful Ctrl+C handling

@@ -61,10 +61,27 @@ Rust command-line client for discovering and connecting to UH services.
 - Discovers all UH services via mDNS (`_uh._tcp.local.`)
 - Lists discovered services with details (name, address, port)
 - Connects to a randomly selected service
-- Receives and displays all broadcast messages
+- Multiple operation modes:
+  - **Listen mode** (default): Receives and displays all broadcast messages
+  - **Set mode**: Sends configuration command to set a value
+  - **Get mode**: Sends configuration command to retrieve current value
 - Clean output format for human consumption
 - Handles connection failures and reconnection
 - Ctrl+C for clean shutdown
+
+### CLI Usage
+```bash
+# Listen to messages (default behavior)
+uhcli
+uhcli listen
+
+# Set configuration value
+uhcli set name=MyDevice
+uhcli set name="My Device"
+
+# Get configuration value
+uhcli get name
+```
 
 ## Non-Functional Requirements
 - Service must run in foreground (Android 8+ requirement)

@@ -56,4 +56,10 @@
 - [x] Implement message receiving and display
 - [x] Implement Ctrl+C handler
 - [x] Add CLI to Makefile targets
+- [x] Add clap for argument parsing
+- [x] Implement listen subcommand (default)
+- [x] Implement set subcommand (configure with value)
+- [x] Implement get subcommand (configure without value)
+- [x] Add response handling with timeout
+- [x] Document CLI usage in SPEC.md and CLAUDE.md
 - [ ] Test with Android app

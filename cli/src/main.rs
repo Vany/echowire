@@ -1,8 +1,9 @@
-use anyhow::{Context, Result};
-use futures_util::StreamExt;
+use anyhow::{anyhow, Context, Result};
+use clap::{Parser, Subcommand};
+use futures_util::{SinkExt, StreamExt};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rand::seq::SliceRandom;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::net::IpAddr;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -11,6 +12,7 @@ use url::Url;
 
 const SERVICE_TYPE: &str = "_uh._tcp.local.";
 const DISCOVERY_TIMEOUT_SECS: u64 = 5;
+const CONFIG_RESPONSE_TIMEOUT_SECS: u64 = 3;
 
 #[derive(Debug, Clone)]
 struct UhService {
@@ -28,10 +30,74 @@ struct RandomMessage {
     timestamp: i64,
 }
 
+#[derive(Debug, Serialize)]
+struct ConfigureRequest {
+    configure: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    value: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ConfigureResponse {
+    configure: String,
+    value: String,
+}
+
+#[derive(Parser)]
+#[command(name = "uhcli")]
+#[command(about = "UH WebSocket Client - Control and monitor UH services", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Listen to messages from a UH service (default behavior)
+    Listen,
+    
+    /// Set a configuration value on a UH service
+    /// 
+    /// Example: uhcli set name=MyDevice
+    Set {
+        /// Configuration key=value pair (e.g., name=MyDevice)
+        #[arg(value_parser = parse_key_value)]
+        config: (String, String),
+    },
+    
+    /// Get a configuration value from a UH service
+    /// 
+    /// Example: uhcli get name
+    Get {
+        /// Configuration key to retrieve
+        key: String,
+    },
+}
+
+/// Parse key=value pair from command line argument.
+fn parse_key_value(s: &str) -> Result<(String, String), String> {
+    let pos = s.find('=')
+        .ok_or_else(|| format!("Invalid KEY=VALUE format: no '=' found in '{}'", s))?;
+    
+    let key = s[..pos].trim().to_string();
+    let value = s[pos + 1..].trim().to_string();
+    
+    if key.is_empty() {
+        return Err("Key cannot be empty".to_string());
+    }
+    
+    // Remove quotes if present
+    let value = value.trim_matches('"').trim_matches('\'').to_string();
+    
+    Ok((key, value))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("UH CLI - WebSocket Random Number Client");
-    println!("========================================\n");
+    let cli = Cli::parse();
+    
+    println!("UH CLI - WebSocket Client");
+    println!("=========================\n");
 
     // Discover services
     let services = discover_services().await?;
@@ -58,8 +124,18 @@ async fn main() -> Result<()> {
 
     println!("Randomly selected: {}\n", selected.name);
 
-    // Connect and receive
-    connect_and_receive(selected).await?;
+    // Execute command
+    match cli.command.unwrap_or(Commands::Listen) {
+        Commands::Listen => {
+            listen_to_service(selected).await?;
+        }
+        Commands::Set { config: (key, value) } => {
+            send_configure_set(selected, &key, &value).await?;
+        }
+        Commands::Get { key } => {
+            send_configure_get(selected, &key).await?;
+        }
+    }
 
     Ok(())
 }
@@ -119,9 +195,8 @@ async fn discover_services() -> Result<Vec<UhService>> {
     Ok(services)
 }
 
-/// Connect to selected service and receive messages.
-async fn connect_and_receive(service: &UhService) -> Result<()> {
-    // Use first available address
+/// Connect to selected service and listen to broadcast messages.
+async fn listen_to_service(service: &UhService) -> Result<()> {
     let address = service
         .addresses
         .first()
@@ -183,6 +258,148 @@ async fn connect_and_receive(service: &UhService) -> Result<()> {
     Ok(())
 }
 
+/// Send configure message to set a value and display response.
+async fn send_configure_set(service: &UhService, key: &str, value: &str) -> Result<()> {
+    let address = service
+        .addresses
+        .first()
+        .context("Service has no addresses")?;
+
+    let ws_url = format!("ws://{}:{}/", address, service.port);
+    println!("Connecting to {}...", ws_url);
+
+    let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
+    let (ws_stream, _) = connect_async(url)
+        .await
+        .context("Failed to connect to WebSocket server")?;
+
+    println!("Connected!\n");
+
+    let (mut write, mut read) = ws_stream.split();
+
+    // Send configure message
+    let request = ConfigureRequest {
+        configure: key.to_string(),
+        value: Some(value.to_string()),
+    };
+    
+    let request_json = serde_json::to_string(&request)
+        .context("Failed to serialize configure request")?;
+    
+    println!("Sending: {}", request_json);
+    write.send(Message::Text(request_json))
+        .await
+        .context("Failed to send configure message")?;
+
+    // Wait for response with timeout
+    let response_future = async {
+        while let Some(msg) = read.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(&text) {
+                        if response.configure == key {
+                            return Ok(response);
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) => {
+                    return Err(anyhow!("Server closed connection"));
+                }
+                Err(e) => {
+                    return Err(anyhow!("Error receiving message: {}", e));
+                }
+                _ => {}
+            }
+        }
+        Err(anyhow!("Connection closed without response"))
+    };
+
+    match timeout(Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS), response_future).await {
+        Ok(Ok(response)) => {
+            println!("\nConfiguration updated:");
+            println!("  {} = {}", response.configure, response.value);
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            Err(anyhow!("Failed to receive response: {}", e))
+        }
+        Err(_) => {
+            Err(anyhow!("Timeout waiting for response"))
+        }
+    }
+}
+
+/// Send configure message to get a value and display response.
+async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
+    let address = service
+        .addresses
+        .first()
+        .context("Service has no addresses")?;
+
+    let ws_url = format!("ws://{}:{}/", address, service.port);
+    println!("Connecting to {}...", ws_url);
+
+    let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
+    let (ws_stream, _) = connect_async(url)
+        .await
+        .context("Failed to connect to WebSocket server")?;
+
+    println!("Connected!\n");
+
+    let (mut write, mut read) = ws_stream.split();
+
+    // Send configure message without value (get operation)
+    let request = ConfigureRequest {
+        configure: key.to_string(),
+        value: None,
+    };
+    
+    let request_json = serde_json::to_string(&request)
+        .context("Failed to serialize configure request")?;
+    
+    println!("Sending: {}", request_json);
+    write.send(Message::Text(request_json))
+        .await
+        .context("Failed to send configure message")?;
+
+    // Wait for response with timeout
+    let response_future = async {
+        while let Some(msg) = read.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(&text) {
+                        if response.configure == key {
+                            return Ok(response);
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) => {
+                    return Err(anyhow!("Server closed connection"));
+                }
+                Err(e) => {
+                    return Err(anyhow!("Error receiving message: {}", e));
+                }
+                _ => {}
+            }
+        }
+        Err(anyhow!("Connection closed without response"))
+    };
+
+    match timeout(Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS), response_future).await {
+        Ok(Ok(response)) => {
+            println!("\nCurrent configuration:");
+            println!("  {} = {}", response.configure, response.value);
+            Ok(())
+        }
+        Ok(Err(e)) => {
+            Err(anyhow!("Failed to receive response: {}", e))
+        }
+        Err(_) => {
+            Err(anyhow!("Timeout waiting for response"))
+        }
+    }
+}
+
 /// Parse and display received message.
 fn handle_message(text: &str) {
     match serde_json::from_str::<RandomMessage>(text) {
@@ -198,7 +415,12 @@ fn handle_message(text: &str) {
             println!("Unknown message type: {}", text);
         }
         Err(_) => {
-            println!("Raw message: {}", text);
+            // Check if it's a configure response
+            if let Ok(response) = serde_json::from_str::<ConfigureResponse>(text) {
+                println!("Config: {} = {}", response.configure, response.value);
+            } else {
+                println!("Raw message: {}", text);
+            }
         }
     }
 }
