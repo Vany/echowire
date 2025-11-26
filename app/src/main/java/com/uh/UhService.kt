@@ -12,6 +12,7 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import org.json.JSONObject
@@ -64,6 +65,9 @@ class UhService : Service() {
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
+
+    // Wake lock for screen control
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // Scheduled tasks
     private var scheduler: ScheduledExecutorService? = null
@@ -200,6 +204,9 @@ class UhService : Service() {
             webSocketServer?.start()
             updateNotification(serverPort)
             
+            // Acquire wake lock to prevent screen from turning off
+            acquireWakeLock()
+            
             // Register mDNS service
             registerMdnsService()
             
@@ -315,6 +322,43 @@ class UhService : Service() {
         }
     }
 
+    /**
+     * Acquire wake lock to prevent screen from turning off while server is running.
+     * Uses SCREEN_BRIGHT_WAKE_LOCK to keep screen on - device should be on wire power.
+     */
+    private fun acquireWakeLock() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "UhService::WebSocketServerWakeLock"
+            ).apply {
+                acquire()
+            }
+            Log.i(TAG, "Wake lock acquired - screen will stay on")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire wake lock", e)
+            listener?.onError("Wake lock acquisition failed: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Release wake lock to allow screen to turn off normally.
+     */
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let { lock ->
+                if (lock.isHeld) {
+                    lock.release()
+                    Log.i(TAG, "Wake lock released")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing wake lock", e)
+        }
+    }
+
     private fun startScheduledTasks() {
         scheduler = Executors.newScheduledThreadPool(2)
 
@@ -378,6 +422,9 @@ class UhService : Service() {
 
         // Unregister mDNS
         unregisterMdnsService()
+
+        // Release wake lock
+        releaseWakeLock()
 
         // Stop WebSocket server
         webSocketServer?.shutdown()

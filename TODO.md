@@ -63,3 +63,10 @@
 - [x] Add response handling with timeout
 - [x] Document CLI usage in SPEC.md and CLAUDE.md
 - [ ] Test with Android app
+
+## Phase 8: Power Management
+- [x] Add WAKE_LOCK permission to AndroidManifest.xml
+- [x] Implement screen lock prevention when WebSocket server is running
+- [x] Acquire SCREEN_BRIGHT_WAKE_LOCK when server starts
+- [x] Release wake lock when service stops
+- [x] Add wake lock error handling and logging

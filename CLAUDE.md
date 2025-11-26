@@ -281,3 +281,52 @@ Thread-safe runtime configuration management with change notification.
 - Validation: Type checking, value constraints
 - More config variables: intervals, thresholds, etc.
 
+## Power Management
+
+### Wake Lock Implementation
+Screen lock prevention to ensure WebSocket server availability while device is on wire power.
+
+**Strategy:**
+- Acquire wake lock when WebSocket server starts (can accept connections)
+- Release wake lock when service stops
+- Uses SCREEN_BRIGHT_WAKE_LOCK with ACQUIRE_CAUSES_WAKEUP flag
+
+**Implementation:**
+- PowerManager.WakeLock field in UhService
+- acquireWakeLock() called after WebSocket server.start()
+- releaseWakeLock() called in stopAllComponents() before server shutdown
+- Wake lock tag: "UhService::WebSocketServerWakeLock"
+
+**Permission:**
+- WAKE_LOCK permission added to AndroidManifest.xml
+
+**Error Handling:**
+- Exceptions logged with TAG
+- Errors reported via ServiceListener.onError()
+- Service continues if wake lock acquisition fails (non-critical)
+
+**Thread Safety:**
+- Wake lock operations on service thread (same as server lifecycle)
+- isHeld check before release prevents double-release
+
+**Assumptions:**
+- Device on wire power (battery drain not a concern)
+- Screen stays on for monitoring/debugging
+- No user configuration for wake lock behavior (always on when server running)
+
+**Lifecycle:**
+```
+Service Start
+  → startWebSocketServer()
+    → server.start()
+    → acquireWakeLock() ✓ screen stays on
+  → (server running, clients can connect)
+
+Service Stop
+  → stopAllComponents()
+    → scheduler.shutdown()
+    → unregisterMdnsService()
+    → releaseWakeLock() ✓ screen can turn off
+    → server.shutdown()
+```
+
