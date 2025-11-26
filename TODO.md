@@ -1,10 +1,20 @@
 # TODO - UH Speech Recognition App - Detailed Implementation Guide
 
-## Phase 1: Project Setup & Dependencies
+## Phase 1: Project Setup & Dependencies ✅ DONE
 
-### 1.1 Update AndroidManifest.xml Permissions
+### 1.1 Update AndroidManifest.xml Permissions ✅
 
 **Location:** `app/src/main/AndroidManifest.xml`
+
+**Completed:**
+- ✅ AndroidManifest.xml updated with RECORD_AUDIO and FOREGROUND_SERVICE_MICROPHONE
+- ✅ Service type changed to "microphone"
+- ✅ Runtime permission request added to MainActivity
+- ✅ Dependencies added to build.gradle.kts
+- ✅ JNI packaging configured
+- ✅ NDK ABI filters configured
+- ✅ Build.gradle.kts updated with all required dependencies
+- ✅ UhService updated to use FOREGROUND_SERVICE_TYPE_MICROPHONE
 
 **Add permissions:**
 ```xml
@@ -1188,6 +1198,30 @@ make logs | grep -E "(AudioCapture|Audio:)"
 # - Should show 20-80% when speaking normally
 # - Should update smoothly (10-20 times per second)
 ```
+
+---
+---
+
+## Phase 2: Model Management ✅ DONE
+
+**Completed:**
+- ✅ ModelManager class created with asset extraction
+- ✅ Whisper tiny multilingual model (66MB) downloaded and bundled
+- ✅ all-MiniLM-L6-v2 embedding model (86MB) downloaded and bundled
+- ✅ Tokenizer (455KB) downloaded and bundled
+- ✅ Download script created: scripts/download_models.sh
+- ✅ Models placed in app/src/main/assets/models/
+- ✅ .gitignore configured for model files
+- ✅ UhService integrated with ModelManager extraction flow
+- ✅ ServiceListener callbacks added for extraction progress
+- ✅ Models extract from assets to internal storage on first run
+- ✅ Total bundled assets: 177MB
+
+**Model Details:**
+- Whisper tiny: Multilingual model supporting 99 languages including Russian and English
+- Has built-in language detection capability
+- Embedding model: all-MiniLM-L6-v2 (384 dimensions)
+- No network dependency - all models bundled in APK
 
 ---
   - [ ] Audio level monitoring (for UI visualization)

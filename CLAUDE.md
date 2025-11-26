@@ -1,10 +1,83 @@
 # CLAUDE Memory - UH Project
 
+## Target Device Constraints
+
+### Hardware: Samsung Galaxy Note20 (SM-N980F)
+- **SoC**: Exynos 990 (NOT Qualcomm Snapdragon)
+- **Architecture**: ARM64-v8a
+- **RAM**: ~7.45 GB
+- **Android**: 12
+- **GPU**: Mali-G77 MP11
+- **NPU**: Available via Android NNAPI
+
+### Critical Limitation: No Qualcomm QNN Support
+The target device uses Samsung Exynos 990, which means:
+- **Cannot use** Qualcomm Neural Network (QNN) SDK
+- **Cannot use** WhisperKit Android with QNN acceleration
+- **Must use** TensorFlow Lite or ONNX Runtime
+- **Can leverage** Samsung NPU via Android NNAPI delegation
+
+### ML Framework Choice: TensorFlow Lite
+**Why TensorFlow Lite:**
+- Works on all Android devices (CPU, GPU, NPU)
+- NNAPI delegation for Samsung NPU acceleration
+- Mature ecosystem with proven Whisper models
+- GPU acceleration via OpenGL/Vulkan on Mali
+- Well-documented model conversion process
+
+**Acceleration Options:**
+1. CPU (baseline, always works)
+2. GPU via TFLite GPU delegate (Mali-G77 support)
+3. NPU via NNAPI delegate (Samsung Neural Processing)
+
+### Dependencies for Exynos
+```kotlin
+// TensorFlow Lite for Whisper inference
+implementation("org.tensorflow:tensorflow-lite:2.14.0")
+implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
+
+// ONNX Runtime for embeddings (cross-platform)
+implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
+```
+
+### Model Bundling Strategy
+**Decision: Bundle models in APK (no network dependency)**
+- Models placed in `app/src/main/assets/models/`
+- Extracted to internal storage on first run
+- Whisper tiny multilingual: 66MB (supports 99 languages including Russian/English)
+- Embedding model: 86MB
+- Tokenizer: 455KB
+- Total APK size increase: ~177MB (acceptable for target use case)
+- Benefits: No download delays, no network errors, instant availability
+
+### Language Detection
+**Requirement:** Support Russian and English with automatic language detection
+**Implementation:** Whisper tiny multilingual model has built-in language detection:
+- Detects 99 languages automatically during transcription
+- No separate language detection model needed
+- Language code returned with each transcription segment
+- Can filter or route based on detected language (Russian/English)
+
 ## Project Context
 - Target: Android 12 (API 31+)
 - Development: macOS 26
 - Language: Kotlin (preferred for Android)
 - Architecture: Service-based with Activity UI
+
+## Target Device Hardware
+- **Device**: Samsung Galaxy Note20 (SM-N980F)
+- **SoC**: Exynos 990 (universal990)
+  - Octa-core: 2x Exynos M5 @ 2.73GHz + 2x Cortex-A76 @ 2.50GHz + 4x Cortex-A55 @ 2.0GHz
+  - GPU: Mali-G77 MP11
+- **Architecture**: ARM64-v8a
+- **RAM**: ~7.45 GB
+- **Display**: 1080x2400 @ 450 DPI (20:9 aspect ratio)
+- **Notes**: 
+  - Non-Qualcomm device (Exynos) → WhisperKit QNN acceleration NOT available
+  - Should use TFLite or Google SpeechRecognizer for speech recognition
+  - Sufficient RAM for small/medium ML models (~250MB)
+  - High-resolution display suitable for detailed UI
 
 ## Key Technical Decisions
 
