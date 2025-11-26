@@ -51,6 +51,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    
+    // Prevent compression of model files for faster loading
+    androidResources {
+        noCompress += listOf("tflite", "onnx", "json")
+    }
 }
 
 dependencies {

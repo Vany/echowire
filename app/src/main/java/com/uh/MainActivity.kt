@@ -278,9 +278,15 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     override fun onModelDownloadProgress(modelName: String, progress: Float, downloaded: Long, total: Long) {
         runOnUiThread {
             val downloadedMB = downloaded / (1024 * 1024)
-            val totalMB = total / (1024 * 1024)
-            val percentage = (progress * 100).toInt()
-            addLog("Extracting $modelName: $percentage% ($downloadedMB MB / $totalMB MB)")
+            if (total > 0) {
+                // Known file size - show percentage and totals
+                val totalMB = total / (1024 * 1024)
+                val percentage = (progress * 100).toInt()
+                addLog("Extracting $modelName: $percentage% ($downloadedMB MB / $totalMB MB)")
+            } else {
+                // Compressed file - show bytes extracted only
+                addLog("Extracting $modelName: $downloadedMB MB (compressed)")
+            }
         }
     }
     

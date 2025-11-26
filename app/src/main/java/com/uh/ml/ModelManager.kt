@@ -176,10 +176,18 @@ class ModelManager private constructor(private val context: Context) {
             val assetManager = context.assets
             val input = assetManager.open(assetPath)
             
-            // Get asset file size for progress reporting
-            val assetFileDescriptor = assetManager.openFd(assetPath)
-            val totalBytes = assetFileDescriptor.length
-            assetFileDescriptor.close()
+            // Try to get asset file size for progress reporting
+            // This may fail if the file is compressed in the APK
+            val totalBytes = try {
+                val assetFileDescriptor = assetManager.openFd(assetPath)
+                val size = assetFileDescriptor.length
+                assetFileDescriptor.close()
+                size
+            } catch (e: Exception) {
+                // File is compressed, cannot get size
+                Log.d(TAG, "$modelName is compressed, extracting without size reporting")
+                -1L
+            }
             
             val output = FileOutputStream(destination)
             
@@ -193,12 +201,23 @@ class ModelManager private constructor(private val context: Context) {
                 extracted += read
                 
                 // Report progress every 100KB to avoid excessive UI updates
-                if (extracted - lastProgressReport > 100 * 1024 || extracted >= totalBytes) {
-                    val progress = extracted.toFloat() / totalBytes
-                    withContext(Dispatchers.Main) {
-                        listener?.onProgress(modelName, progress, extracted, totalBytes)
+                if (totalBytes > 0) {
+                    // Known file size - report percentage progress
+                    if (extracted - lastProgressReport > 100 * 1024 || extracted >= totalBytes) {
+                        val progress = extracted.toFloat() / totalBytes
+                        withContext(Dispatchers.Main) {
+                            listener?.onProgress(modelName, progress, extracted, totalBytes)
+                        }
+                        lastProgressReport = extracted
                     }
-                    lastProgressReport = extracted
+                } else {
+                    // Compressed file - report bytes extracted only (progress = 0.0)
+                    if (extracted - lastProgressReport > 100 * 1024) {
+                        withContext(Dispatchers.Main) {
+                            listener?.onProgress(modelName, 0.0f, extracted, -1L)
+                        }
+                        lastProgressReport = extracted
+                    }
                 }
             }
             
