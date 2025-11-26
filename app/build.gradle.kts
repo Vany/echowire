@@ -70,12 +70,12 @@ dependencies {
     // JSON
     implementation("org.json:json:20231013")
     
-    // Speech Recognition - WhisperKit Android
-    implementation("com.argmaxinc:whisperkit:0.3.3")
-    implementation("com.qualcomm.qnn:qnn-runtime:2.34.0")
-    implementation("com.qualcomm.qnn:qnn-litert-delegate:2.34.0")
+    // Speech Recognition - TensorFlow Lite (works on Exynos)
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
     
-    // Text Embeddings - ONNX Runtime
+    // Text Embeddings - ONNX Runtime (works on all ARM64)
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
     
     // Coroutines for async operations
