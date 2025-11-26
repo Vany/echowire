@@ -62,7 +62,7 @@ class AudioPreprocessor {
         
         // 3. Convert to power spectrogram (magnitude squared)
         val powerSpec = stft.map { frame ->
-            frame.map { it * it }.toFloatArray()
+            FloatArray(frame.size) { i -> (frame[i] * frame[i]).toFloat() }
         }.toTypedArray()
         
         // 4. Apply mel filter banks
@@ -140,7 +140,7 @@ class AudioPreprocessor {
             FloatArray(N_MELS) { melIdx ->
                 // Dot product: mel filter bank × power spectrum
                 melFilterBanks[melIdx].indices.sumOf { freqIdx ->
-                    melFilterBanks[melIdx][freqIdx] * frame[freqIdx]
+                    (melFilterBanks[melIdx][freqIdx] * frame[freqIdx]).toDouble()
                 }.toFloat()
             }
         }.toTypedArray()
