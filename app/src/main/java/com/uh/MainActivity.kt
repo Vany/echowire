@@ -1,13 +1,16 @@
 package com.uh
 
+import android.Manifest
 import android.content.ComponentName
 import android.content.Intent
 import android.content.ServiceConnection
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.IBinder
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -22,6 +25,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     companion object {
         private const val MAX_LOG_LINES = 100
+        private const val RECORD_AUDIO_REQUEST_CODE = 1001
     }
 
     private lateinit var nameTextView: TextView
@@ -106,6 +110,24 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private fun startService() {
+        // Check for RECORD_AUDIO permission before starting service
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
+            != PackageManager.PERMISSION_GRANTED) {
+            // Request permission
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                RECORD_AUDIO_REQUEST_CODE
+            )
+            addLog("Requesting microphone permission...")
+            return
+        }
+        
+        // Permission already granted, start service
+        startServiceInternal()
+    }
+    
+    private fun startServiceInternal() {
         val intent = Intent(this, UhService::class.java)
         ContextCompat.startForegroundService(this, intent)
         
@@ -113,6 +135,23 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         bindService(intent, serviceConnection, 0)
         
         addLog("Starting service...")
+    }
+    
+    override fun onRequestPermissionsResult(
+        requestCode: Int, 
+        permissions: Array<String>, 
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        
+        if (requestCode == RECORD_AUDIO_REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                addLog("Microphone permission granted")
+                startServiceInternal()
+            } else {
+                addLog("ERROR: Microphone permission denied - cannot function without microphone")
+            }
+        }
     }
 
     private fun stopService() {

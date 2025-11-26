@@ -13,6 +13,11 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        
+        // Support for native libraries
+        ndk {
+            abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
+        }
     }
 
     buildTypes {
@@ -37,6 +42,15 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
 }
 
 dependencies {
@@ -46,9 +60,25 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     
+    // Lifecycle components
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
+    implementation("androidx.lifecycle:lifecycle-service:2.6.2")
+    
     // WebSocket server
     implementation("org.java-websocket:Java-WebSocket:1.5.5")
     
     // JSON
     implementation("org.json:json:20231013")
+    
+    // Speech Recognition - WhisperKit Android
+    implementation("com.argmaxinc:whisperkit:0.3.3")
+    implementation("com.qualcomm.qnn:qnn-runtime:2.34.0")
+    implementation("com.qualcomm.qnn:qnn-litert-delegate:2.34.0")
+    
+    // Text Embeddings - ONNX Runtime
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
+    
+    // Coroutines for async operations
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 }
