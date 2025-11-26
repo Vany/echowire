@@ -158,8 +158,9 @@ class WhisperModel(
             val compatibilityList = CompatibilityList()
             
             if (compatibilityList.isDelegateSupportedOnThisDevice) {
-                // Create GPU delegate with default options
-                gpuDelegate = GpuDelegate()
+                // Get best GPU delegate options for this device
+                val delegateOptions = compatibilityList.bestOptionsForThisDevice
+                gpuDelegate = GpuDelegate(delegateOptions)
                 options.addDelegate(gpuDelegate)
                 true
             } else {
