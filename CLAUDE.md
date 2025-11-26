@@ -980,6 +980,90 @@ Service Stop
     → server.shutdown()
 ```
 
+## ML Inference Framework Research - November 2024
+
+### Research Summary: Alternatives to TensorFlow Lite & ONNX Runtime
+
+**Date:** 2024-11-26  
+**Full Details:** See `/RESEARCH_ML_FRAMEWORKS.md`
+
+**Context:**
+- Currently using TFLite (Whisper) with XNNPack CPU acceleration (400-600ms, 0.4-0.6x RTF)
+- TFLite GPU delegate broken in all 2.x versions (NoClassDefFoundError)
+- Researched alternatives optimized for Samsung Note20 (Exynos 990, Mali-G77 MP11)
+
+**Key Findings:**
+
+#### Top Recommendations for Mali-G77 GPU:
+
+1. **Arm NN (ARM Software)** ⭐ BEST CHOICE
+   - Most performant ML inference engine specifically for Arm CPUs and Mali GPUs
+   - Drop-in TFLite delegate (minimal code changes)
+   - Uses Arm Compute Library (ACL) with Mali-specific optimizations
+   - Expected: 2-3x speedup over XNNPack (200-300ms vs 400-600ms)
+   - Supports OpenCL, Vulkan
+   - Binary size: +5MB
+   - Maturity: Production-tested, active development
+   - **Integration effort: 2-4 hours**
+
+2. **MNN (Alibaba)** ⭐ BEST ALTERNATIVE
+   - Lightweight engine battle-tested at Alibaba scale
+   - Deeply tuned for Mali GPUs (explicit optimization)
+   - Multiple backends: OpenCL, Vulkan, OpenGL
+   - Expected: 2-3x speedup (same as Arm NN)
+   - Binary size: +400KB (smallest option)
+   - Supports TensorFlow, Caffe, ONNX, Torchscripts
+   - LLM support recently added (future-proof)
+   - **Integration effort: 1-2 days (requires model conversion to .mnn format)**
+
+3. **NCNN (Tencent)** ✅ SOLID CHOICE
+   - Good Vulkan-based GPU acceleration
+   - Hand-optimized ARM NEON assembly
+   - Expected: 1.5-2x speedup over XNNPack
+   - Binary size: ~500KB-1MB
+   - Mature and stable
+   - **Integration effort: 1-2 days (requires model conversion)**
+
+#### Frameworks Not Recommended:
+
+- **MediaPipe:** Framework overhead, uses TFLite GPU internally (same issues), overkill for simple inference
+- **ONNX Runtime:** No GPU support for Mali, CPU-only (keep for embeddings, avoid for Whisper)
+
+#### Performance Comparison (Estimated for Whisper Tiny):
+
+| Framework | Backend | RTF | Latency (1s audio) | Speedup |
+|-----------|---------|-----|--------------------|---------| 
+| TFLite (current) | XNNPack CPU | 0.4-0.6x | 400-600ms | Baseline |
+| **Arm NN** | Mali GPU (OpenCL) | 0.2-0.3x | 200-300ms | **2-3x** ⭐ |
+| **MNN** | Mali GPU (Vulkan) | 0.2-0.3x | 200-300ms | **2-3x** ⭐ |
+| **NCNN** | Vulkan | 0.3-0.4x | 300-400ms | **1.5-2x** |
+| MediaPipe | OpenGL (TFLite) | 0.4-0.6x | 400-600ms | Same |
+| ONNX Runtime | CPU | 0.6-0.8x | 600-800ms | 1.5x slower |
+
+#### Decision:
+
+**Status Quo (Keep TFLite XNNPack):** Acceptable - already meets <500ms target with buffering, lowest risk
+
+**Recommended Upgrade Path:**
+1. Try **Arm NN TFLite Delegate** first (weekend project, 2-4 hours)
+   - Drop-in replacement for TFLite GPU delegate
+   - Measure speedup on actual device
+   - If 2x+ achieved → commit
+   - If issues → revert to XNNPack (no risk)
+2. If Arm NN doesn't work → try **MNN** as alternative
+3. If neither works → current solution is good enough
+
+**Conservative Strategy:** Current TFLite solution works, don't fix what isn't broken  
+**Aggressive Strategy:** Try Arm NN this weekend for 2-3x performance gain
+
+#### Links:
+- Arm NN: https://github.com/ARM-software/armnn
+- MNN: https://github.com/alibaba/MNN
+- NCNN: https://github.com/Tencent/ncnn
+- Full Research: `/RESEARCH_ML_FRAMEWORKS.md`
+
+---
+
 ## Android Speech Recognition Research (2024-2025)
 
 ### On-Device Speech Recognition Approaches
