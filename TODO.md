@@ -1202,6 +1202,48 @@ make logs | grep -E "(AudioCapture|Audio:)"
 ---
 ---
 
+## Phase 3: Audio Capture ✅ DONE
+
+**Completed:**
+- ✅ AudioCaptureManager class created with 16kHz/mono/16-bit configuration
+- ✅ SimpleVAD class created for energy-based voice activity detection
+- ✅ Audio level monitoring implemented (RMS calculation)
+- ✅ Integrated into UhService lifecycle
+- ✅ ServiceListener callbacks added (onAudioLevelChanged, onListeningStateChanged)
+- ✅ MainActivity callbacks implemented
+- ✅ Continuous capture with 100ms buffer chunks
+- ✅ High-priority audio thread (THREAD_PRIORITY_URGENT_AUDIO)
+- ✅ Auto-start listening after models load
+- ✅ VAD threshold: 0.02, min consecutive frames: 3
+- ✅ Clean resource cleanup in stopAllComponents
+
+**Audio Configuration:**
+- Sample rate: 16000 Hz (Whisper requirement)
+- Channel: Mono
+- Format: 16-bit PCM signed
+- Buffer size: 100ms (1600 samples = 3200 bytes)
+- Audio level updates: ~10 times per second
+
+**Testing:**
+```bash
+# Install and test
+make install
+make logs | grep -E "(Audio|Speech|Listening)"
+
+# Expected logs:
+# - "AudioRecord initialized: buffer=..."
+# - "Audio capture initialized"
+# - "Listening started - microphone active"
+# - "Speech detected: level=..." (when speaking)
+```
+
+**Next Steps:**
+- Add audio level meter UI visualization (optional for now)
+- Phase 4: Integrate Whisper speech recognition
+- Feed audio data from AudioCaptureManager to Whisper
+
+---
+
 ## Phase 2: Model Management ✅ DONE
 
 **Completed:**

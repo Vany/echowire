@@ -17,6 +17,8 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.uh.audio.AudioCaptureManager
+import com.uh.audio.SimpleVAD
 import com.uh.ml.ModelManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,6 +64,10 @@ class UhService : Service() {
         fun onModelDownloadProgress(modelName: String, progress: Float, downloaded: Long, total: Long)
         fun onModelLoading(status: String)
         fun onModelLoaded(status: String)
+        
+        // Audio capture callbacks
+        fun onAudioLevelChanged(level: Float)
+        fun onListeningStateChanged(listening: Boolean)
     }
 
     // Service binding
@@ -76,6 +82,12 @@ class UhService : Service() {
     private lateinit var modelManager: ModelManager
     private var modelDownloadJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+
+    // Audio capture
+    private var audioCaptureManager: AudioCaptureManager? = null
+    private var vad: SimpleVAD? = null
+    @Volatile
+    private var isListening: Boolean = false
 
     // WebSocket server
     private var webSocketServer: UhWebSocketServer? = null
@@ -208,6 +220,7 @@ class UhService : Service() {
     private fun startAllComponents() {
         startWebSocketServer()
         startScheduledTasks()
+        initializeAudioCapture()
     }
 
     override fun onDestroy() {
@@ -535,8 +548,112 @@ class UhService : Service() {
             Log.e(TAG, "Error sending ping", e)
         }
     }
+    
+    /**
+     * Initialize audio capture system.
+     * Creates AudioCaptureManager and VAD, but does not start capture yet.
+     */
+    private fun initializeAudioCapture() {
+        try {
+            audioCaptureManager = AudioCaptureManager()
+            audioCaptureManager?.initialize()
+            
+            vad = SimpleVAD(
+                threshold = 0.02f,
+                minConsecutiveFrames = 3
+            )
+            
+            Log.i(TAG, "Audio capture initialized")
+            
+            // Auto-start listening after initialization
+            startListening()
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize audio capture", e)
+            listener?.onError("Audio initialization failed: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Start continuous audio capture with VAD.
+     */
+    private fun startListening() {
+        if (isListening) {
+            Log.w(TAG, "Already listening")
+            return
+        }
+        
+        val manager = audioCaptureManager
+        if (manager == null) {
+            Log.e(TAG, "AudioCaptureManager not initialized")
+            return
+        }
+        
+        try {
+            manager.startCapture(object : AudioCaptureManager.AudioDataListener {
+                override fun onAudioData(audioData: ShortArray, sampleRate: Int, timestamp: Long) {
+                    // TODO: Feed to speech recognition (Phase 4)
+                    // For now, just process with VAD
+                    val currentVad = vad
+                    if (currentVad != null) {
+                        val level = manager.getCurrentAudioLevel()
+                        val isSpeech = currentVad.processFrame(level)
+                        
+                        if (isSpeech) {
+                            // Log speech detection for testing
+                            // Will be replaced with actual speech recognition
+                            Log.d(TAG, "Speech detected: level=$level, samples=${audioData.size}")
+                        }
+                    }
+                }
+                
+                override fun onAudioLevel(level: Float) {
+                    listener?.onAudioLevelChanged(level)
+                }
+                
+                override fun onError(error: Exception) {
+                    Log.e(TAG, "Audio capture error", error)
+                    listener?.onError("Audio capture error: ${error.message}", error)
+                    stopListening()
+                }
+            })
+            
+            isListening = true
+            listener?.onListeningStateChanged(true)
+            Log.i(TAG, "Listening started")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start listening", e)
+            listener?.onError("Failed to start listening: ${e.message}", e)
+        }
+    }
+    
+    /**
+     * Stop audio capture.
+     */
+    private fun stopListening() {
+        if (!isListening) {
+            return
+        }
+        
+        try {
+            audioCaptureManager?.stopCapture()
+            vad?.reset()
+            isListening = false
+            listener?.onListeningStateChanged(false)
+            Log.i(TAG, "Listening stopped")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping listening", e)
+        }
+    }
 
     private fun stopAllComponents() {
+        // Stop audio capture
+        stopListening()
+        audioCaptureManager?.release()
+        audioCaptureManager = null
+        vad = null
+        
         // Stop scheduled tasks
         scheduler?.shutdown()
         try {

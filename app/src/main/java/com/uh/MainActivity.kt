@@ -272,4 +272,49 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             }
         }
     }
+    
+    // Model management callbacks
+    
+    override fun onModelDownloadProgress(modelName: String, progress: Float, downloaded: Long, total: Long) {
+        runOnUiThread {
+            val downloadedMB = downloaded / (1024 * 1024)
+            val totalMB = total / (1024 * 1024)
+            val percentage = (progress * 100).toInt()
+            addLog("Extracting $modelName: $percentage% ($downloadedMB MB / $totalMB MB)")
+        }
+    }
+    
+    override fun onModelLoading(status: String) {
+        runOnUiThread {
+            addLog(status)
+        }
+    }
+    
+    override fun onModelLoaded(status: String) {
+        runOnUiThread {
+            addLog(status)
+        }
+    }
+    
+    // Audio capture callbacks
+    
+    override fun onAudioLevelChanged(level: Float) {
+        // This will be called frequently (~10 times per second)
+        // We'll update UI in the next step when we add the audio level meter
+        // For now, just log occasionally for testing
+        // Uncomment to see audio levels in log:
+        // if (System.currentTimeMillis() % 1000 < 100) {
+        //     runOnUiThread { addLog("Audio level: ${(level * 100).toInt()}%") }
+        // }
+    }
+    
+    override fun onListeningStateChanged(listening: Boolean) {
+        runOnUiThread {
+            if (listening) {
+                addLog("Listening started - microphone active")
+            } else {
+                addLog("Listening stopped")
+            }
+        }
+    }
 }
