@@ -26,6 +26,7 @@ class ModelManager private constructor(private val context: Context) {
         
         // Asset paths (bundled in APK)
         private const val WHISPER_ASSET_PATH = "models/whisper_tiny.tflite"
+        private const val WHISPER_VOCAB_ASSET_PATH = "models/whisper_vocab.json"
         private const val EMBEDDING_ASSET_PATH = "models/embedding.onnx"
         private const val TOKENIZER_ASSET_PATH = "models/tokenizer.json"
         
@@ -42,6 +43,7 @@ class ModelManager private constructor(private val context: Context) {
     // Model file references in internal storage
     private val modelsDir: File = File(context.filesDir, MODELS_DIR)
     val whisperModelFile: File = File(modelsDir, "whisper_tiny.tflite")
+    val whisperVocabFile: File = File(modelsDir, "whisper_vocab.json")
     val embeddingModelFile: File = File(modelsDir, "embedding.onnx")
     val tokenizerFile: File = File(modelsDir, "tokenizer.json")
     
@@ -75,6 +77,7 @@ class ModelManager private constructor(private val context: Context) {
      */
     fun areModelsExtracted(): Boolean {
         return whisperModelFile.exists() && 
+               whisperVocabFile.exists() &&
                embeddingModelFile.exists() && 
                tokenizerFile.exists()
     }
@@ -85,6 +88,7 @@ class ModelManager private constructor(private val context: Context) {
     fun getTotalModelSize(): Long {
         var size = 0L
         if (whisperModelFile.exists()) size += whisperModelFile.length()
+        if (whisperVocabFile.exists()) size += whisperVocabFile.length()
         if (embeddingModelFile.exists()) size += embeddingModelFile.length()
         if (tokenizerFile.exists()) size += tokenizerFile.length()
         return size
@@ -108,6 +112,19 @@ class ModelManager private constructor(private val context: Context) {
                 )
             } else {
                 Log.d(TAG, "Whisper model already exists: ${whisperModelFile.length()} bytes")
+            }
+            
+            // Extract Whisper vocabulary if not exists
+            if (!whisperVocabFile.exists()) {
+                Log.i(TAG, "Extracting Whisper vocabulary from assets...")
+                extractModelFromAssets(
+                    assetPath = WHISPER_VOCAB_ASSET_PATH,
+                    destination = whisperVocabFile,
+                    modelName = "Whisper Vocabulary",
+                    listener = listener
+                )
+            } else {
+                Log.d(TAG, "Whisper vocabulary already exists: ${whisperVocabFile.length()} bytes")
             }
             
             // Extract embedding model if not exists
@@ -214,6 +231,7 @@ class ModelManager private constructor(private val context: Context) {
      */
     fun deleteAllModels() {
         whisperModelFile.delete()
+        whisperVocabFile.delete()
         embeddingModelFile.delete()
         tokenizerFile.delete()
         isWhisperLoaded = false

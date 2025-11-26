@@ -201,9 +201,9 @@ class UhService : Service() {
             try {
                 listener?.onModelLoading("Loading models...")
                 
-                // Initialize Whisper model and tokenizer paths
-                val whisperModelFile = File(filesDir, "models/whisper_tiny.tflite")
-                val vocabFile = File(filesDir, "models/whisper_vocab.json")
+                // Get model file paths from ModelManager
+                val whisperModelFile = modelManager.whisperModelFile
+                val vocabFile = modelManager.whisperVocabFile
                 
                 if (!whisperModelFile.exists()) {
                     throw IllegalStateException("Whisper model not found: ${whisperModelFile.absolutePath}")

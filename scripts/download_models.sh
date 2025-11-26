@@ -14,6 +14,13 @@ echo "Downloading Whisper tiny multilingual TFLite model..."
 curl -L "https://github.com/usefulsensors/openai-whisper/raw/main/models/whisper-tiny.tflite" \
   -o "$MODELS_DIR/whisper_tiny.tflite" || echo "WARNING: Whisper download failed - will need manual download"
 
+# Whisper vocabulary (GPT-2 BPE, 51865 tokens)
+# From OpenAI Whisper HuggingFace repository
+echo "Downloading Whisper vocabulary..."
+curl -L "https://huggingface.co/openai/whisper-tiny/resolve/main/vocab.json" \
+  -o "$MODELS_DIR/whisper_vocab.json" || \
+echo "WARNING: Whisper vocab download failed - will need manual download"
+
 # all-MiniLM-L6-v2 ONNX model for embeddings (384 dimensions)
 echo "Downloading all-MiniLM-L6-v2 embedding model..."
 curl -L "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx" \
