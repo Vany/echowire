@@ -158,14 +158,13 @@ class UhService : Service() {
     /**
      * Initialize models - extract from assets if needed, then load
      */
+    /**
+     * Initialize models - always run extraction to verify/fix files
+     * Extraction will skip files that already exist and are correct
+     */
     private fun initializeModels() {
-        if (modelManager.areModelsExtracted()) {
-            Log.i(TAG, "Models already extracted, loading...")
-            loadModels()
-        } else {
-            Log.i(TAG, "Models not found, extracting from assets...")
-            extractModels()
-        }
+        Log.i(TAG, "Initializing models (will verify/extract as needed)...")
+        extractModels()
     }
     
     /**
