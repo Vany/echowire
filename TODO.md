@@ -1423,7 +1423,7 @@ assert(!whisperModel.isLoaded)
 
 **Completed:**
 - ✅ WhisperTokenizer class created with full BPE decoding
-- ✅ Vocabulary loading from JSON file (lazy initialization)
+- ✅ Vocabulary loading from JSON file (proper Iterator iteration)
 - ✅ Token ID to text decoding with BPE artifact cleanup
 - ✅ Special token handling (start, end, language, timestamps)
 - ✅ UTF-8 support (BPE Ġ space marker conversion)
@@ -1431,6 +1431,14 @@ assert(!whisperModel.isLoaded)
 - ✅ Timestamp extraction (20ms increments, 50364-51864)
 - ✅ Decode statistics (token counts, language, timestamps)
 - ✅ BPE cleanup (space markers, punctuation spacing)
+- ✅ CRITICAL FIX: Vocabulary loading bug resolved
+  - Changed from `.forEach{}` to `while(hasNext())` iteration
+  - Fixed loading only 135 tokens instead of 51,865
+  - All tokens now decode correctly
+- ✅ CRITICAL FIX: Vocab file extraction on every startup
+  - ModelManager now checks file size before skipping extraction
+  - Forces re-extraction if file < 1MB (detects wrong format)
+  - UhService always calls extractModels() to verify files
 
 **Key Design Decisions:**
 - Lazy vocabulary loading (only when first decode() called)
