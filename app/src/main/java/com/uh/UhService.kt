@@ -698,6 +698,8 @@ class UhService : Service() {
                 
                 override fun onAudioLevel(level: Float) {
                     listener?.onAudioLevelChanged(level)
+                    // Broadcast audio status to WebSocket clients
+                    broadcastAudioStatus(level)
                 }
                 
                 override fun onError(error: Exception) {
@@ -767,8 +769,61 @@ class UhService : Service() {
         // Notify listener for UI update
         listener?.onTranscriptionReceived(text, language, processingTimeMs)
         
-        // TODO Phase 6: Broadcast via WebSocket
-        // broadcastSpeechMessage(text, language, embedding, startTime, endTime)
+        // Broadcast via WebSocket
+        broadcastSpeechMessage(text, embedding, language, startTime, endTime, processingTimeMs)
+    }
+    
+    /**
+     * Broadcast speech recognition result with embedding to all WebSocket clients
+     */
+    private fun broadcastSpeechMessage(
+        text: String,
+        embedding: FloatArray,
+        language: String?,
+        startTime: Long,
+        endTime: Long,
+        processingTimeMs: Long
+    ) {
+        try {
+            val message = JSONObject().apply {
+                put("type", "speech")
+                put("text", text)
+                put("embedding", org.json.JSONArray(embedding.toList()))
+                put("language", language ?: "unknown")
+                put("timestamp", System.currentTimeMillis())
+                put("segment_start", startTime)
+                put("segment_end", endTime)
+                put("processing_time_ms", processingTimeMs)
+                put("audio_duration_ms", endTime - startTime)
+                put("rtf", processingTimeMs.toFloat() / (endTime - startTime).toFloat())
+            }
+            
+            webSocketServer?.broadcastMessage(message.toString())
+            Log.d(TAG, "Broadcast speech message: ${text.take(50)}...")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to broadcast speech message", e)
+        }
+    }
+    
+    /**
+     * Broadcast audio status to all WebSocket clients
+     * Called periodically (~10 times/sec) with current audio level
+     */
+    private fun broadcastAudioStatus(audioLevel: Float) {
+        try {
+            val message = JSONObject().apply {
+                put("type", "audio_status")
+                put("listening", isListening)
+                put("audio_level", audioLevel)
+                put("timestamp", System.currentTimeMillis())
+            }
+            
+            webSocketServer?.broadcastMessage(message.toString())
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to broadcast audio status", e)
+        }
     }
 
     private fun stopAllComponents() {
