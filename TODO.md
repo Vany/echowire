@@ -63,8 +63,7 @@
 
 ## 🚧 REMAINING WORK
 
-### Phase 9: Model Pipeline Verification & Device Testing (CURRENT PHASE)
-**Status**: AUDIT COMPLETE - READY FOR DEVICE TESTING
+### Phase 9: Model Pipeline Verification & Device Testing ✅ COMPLETE
 
 #### Pre-Testing Verification ✅
 - [x] Download whisper model from usefulsensors
@@ -73,26 +72,58 @@
 - [x] Verify binary vocabulary exists (289.9 KB)
 - [x] Audit code pipeline for correctness
 
-#### Critical Testing Required (30 minutes)
+#### Critical Testing ✅ COMPLETE
 **Goal**: Determine model output format (INT32 vs FLOAT32)
 
-- [ ] Install on Samsung Note20 (`make install`)
-- [ ] Start log monitoring (`make logs`)
-- [ ] Observe model loading logs
-- [ ] **CRITICAL**: Record output tensor shape and dtype
-- [ ] Speak into device and trigger inference
-- [ ] **CRITICAL**: Check if token IDs are sensible (0-51865 range)
-- [ ] Verify token decoding produces readable text
-- [ ] Check language detection accuracy
+- [x] Install on Samsung Note20 (`make install`)
+- [x] Start log monitoring (`make logs`)
+- [x] Observe model loading logs
+- [x] **CRITICAL**: Record output tensor shape and dtype
+- [x] Speak into device and trigger inference
+- [x] **CRITICAL**: Check if token IDs are sensible (0-51865 range)
+- [x] Verify token decoding produces readable text
+- [x] Check language detection accuracy
 
-**See WHISPER_MODEL_AUDIT.md for detailed test procedures and diagnosis tree**
+**RESULTS**: 
+- ✅ Output format: INT32 [1, 448] (CODE IS CORRECT!)
+- ✅ Inference time: 743-776ms (within target)
+- ✅ Real-time factor: 0.09-0.96x (excellent!)
+- ✅ Text transcription: WORKS PERFECTLY
+- ❌ Language detection: BROKEN (outputs ru/50263 for English speech)
 
-#### Potential Fixes (if needed, 1-2 hours)
-- [ ] If model outputs FLOAT32: Implement argmax in WhisperModel.kt
-- [ ] If wrong vocabulary: Switch from JSON to binary vocab
-- [ ] If model issues: Download vilassn/whisper_android reference model
+**See MODEL_TEST_RESULTS.md for detailed analysis**
 
-### Phase 10: Testing & Validation
+### Phase 10: Language Detection Fix (CURRENT - 30 minutes)
+
+**Problem**: Model outputs Russian language token (50263) for English speech  
+**Impact**: Language field shows "ru" instead of "en", but transcription works correctly
+
+**Options**:
+
+#### Option A: Text-Based Language Detection (30 min, RECOMMENDED)
+- [ ] Implement `detectLanguageFromText()` in WhisperTokenizer
+- [ ] Use character frequency analysis (Latin vs Cyrillic vs other)
+- [ ] Override model's language token with detected language
+- [ ] Test with English and Russian speech
+- **Pros**: Language-agnostic, works for all languages
+- **Cons**: Less accurate than model's native detection
+
+#### Option B: Force English (5 min, QUICK FIX)
+- [ ] Hard-code language to "en" in WhisperTokenizer
+- [ ] Document as English-only configuration
+- **Pros**: Immediate fix, simple
+- **Cons**: No multilingual support
+
+#### Option C: Switch to Reference Model (2-4 hours)
+- [ ] Download vilassn/whisper_android model
+- [ ] Adapt to encoder-decoder split architecture
+- [ ] Test language detection
+- **Pros**: Proven working model
+- **Cons**: Significant code changes required
+
+**Recommendation**: Start with Option A (30 min), fallback to Option B if needed
+
+### Phase 11: Device Testing & Validation
 #### Device Testing (Physical Device Required)
 - [ ] Install on Samsung Note20 (8GB RAM, Exynos 990)
 - [ ] Verify model extraction (check internal storage files)
