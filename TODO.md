@@ -2132,7 +2132,70 @@ Text → Tokenize → ONNX inference → Mean pooling → L2 normalize → 384-d
 
 ---
 
-## Phase 6: WebSocket Integration
+## Phase 6: WebSocket Integration ✅ DONE
+
+**Completed:**
+
+### Android (UhService):
+- ✅ Created `broadcastSpeechMessage()` method
+- ✅ Message type: "speech" with text, embedding (384 floats), language, timestamps
+- ✅ Metadata: processing_time_ms, audio_duration_ms, RTF
+- ✅ Automatic broadcasting after each transcription
+- ✅ Created `broadcastAudioStatus()` method
+- ✅ Message type: "audio_status" with listening state, audio_level, timestamp
+- ✅ Broadcasts ~10 times/sec with current audio level
+- ✅ Both use existing `UhWebSocketServer.broadcastMessage()` infrastructure
+
+### CLI Client (uhcli):
+- ✅ Added `SpeechMessage` struct for speech recognition results
+- ✅ Added `AudioStatusMessage` struct for audio status updates
+- ✅ Updated `handle_message()` with priority parsing
+- ✅ Speech display: text, language, timing, RTF, embedding preview
+- ✅ Audio status display: listening state, visual level bar
+- ✅ Backward compatible with legacy RandomMessage and ConfigureResponse
+
+**Message Format (speech):**
+```json
+{
+  "type": "speech",
+  "text": "recognized phrase",
+  "embedding": [0.123, -0.456, ...],  // 384 floats
+  "language": "en",
+  "timestamp": 1234567890123,
+  "segment_start": 1234567890000,
+  "segment_end": 1234567891000,
+  "processing_time_ms": 650,
+  "audio_duration_ms": 1000,
+  "rtf": 0.65
+}
+```
+
+**Message Format (audio_status):**
+```json
+{
+  "type": "audio_status",
+  "listening": true,
+  "audio_level": 0.305,
+  "timestamp": 1234567890123
+}
+```
+
+**CLI Output Examples:**
+```
+[12:34:56.789] Speech [en] (650ms, RTF=0.65): "recognized phrase"
+      Embedding: [0.1234, -0.5678, 0.9012, -0.3456, 0.7890...] (384 dims)
+
+[12:34:56.789] Audio: LISTENING | Level: ██████              30.5%
+```
+
+**Integration Complete:**
+- Android captures audio → recognizes speech → generates embeddings → broadcasts to all WebSocket clients
+- CLI client receives messages → parses → displays in human-readable format
+- Fire-and-forget broadcast model (no client tracking, no message replay)
+
+---
+
+## Phase 7: Service Architecture
 - [ ] Extend UhWebSocketServer for speech messages
   - [ ] Add "speech" message type handling
   - [ ] Add "audio_status" message type

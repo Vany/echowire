@@ -1544,3 +1544,76 @@ listener?.onTranscription(text, embedding, language, ...)
 **Thread Safety:** ReentrantLock for ONNX session, vocabulary immutable
 
 **Next:** Phase 6 - WebSocket broadcasting of speech+embeddings
+
+## Phase 6: WebSocket Integration - COMPLETED (2024-11-30)
+
+### Android Implementation (UhService)
+
+**Speech Message Broadcasting:**
+- `broadcastSpeechMessage()`: creates JSON with type="speech"
+- Called automatically after each transcription in `handleTranscription()`
+- Includes: text, embedding (384 floats), language, timestamps, metadata
+- Uses existing `UhWebSocketServer.broadcastMessage()` infrastructure
+
+**Audio Status Broadcasting:**
+- `broadcastAudioStatus()`: creates JSON with type="audio_status"
+- Called ~10 times/sec in `onAudioLevel()` callback
+- Includes: listening state (boolean), audio_level (0.0-1.0), timestamp
+- Provides real-time feedback to clients
+
+**Message Formats:**
+```json
+// Speech recognition result
+{
+  "type": "speech",
+  "text": "recognized phrase",
+  "embedding": [0.123, -0.456, ...],  // 384 floats
+  "language": "en",
+  "timestamp": 1234567890123,
+  "segment_start": 1234567890000,
+  "segment_end": 1234567891000,
+  "processing_time_ms": 650,
+  "audio_duration_ms": 1000,
+  "rtf": 0.65
+}
+
+// Audio status update
+{
+  "type": "audio_status",
+  "listening": true,
+  "audio_level": 0.305,
+  "timestamp": 1234567890123
+}
+```
+
+### CLI Client Implementation (cli/src/main.rs)
+
+**Message Type Handlers:**
+- `SpeechMessage`: deserializes speech recognition results
+- `AudioStatusMessage`: deserializes audio status updates
+- `RandomMessage`: legacy support (backward compatible)
+- `ConfigureResponse`: configuration responses
+
+**Display Format:**
+```
+Speech messages:
+[12:34:56.789] Speech [en] (650ms, RTF=0.65): "recognized phrase"
+      Embedding: [0.1234, -0.5678, 0.9012, -0.3456, 0.7890...] (384 dims)
+
+Audio status:
+[12:34:56.789] Audio: LISTENING | Level: ██████              30.5%
+```
+
+**Parsing Priority:**
+1. SpeechMessage (primary)
+2. AudioStatusMessage
+3. RandomMessage (legacy)
+4. ConfigureResponse
+5. Raw message (fallback)
+
+**Integration:**
+- Android: audio → speech → embedding → WebSocket broadcast
+- CLI: receives → parses → displays
+- Fire-and-forget broadcast (no replay, no client tracking)
+
+**Status:** Phase 6 complete! End-to-end pipeline functional. Ready for device testing.
