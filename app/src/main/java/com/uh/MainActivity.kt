@@ -33,6 +33,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private lateinit var logTextView: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var waveformView: com.uh.ui.WaveformView
 
     private var uhService: UhService? = null
     private var serviceBound: Boolean = false
@@ -84,6 +85,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         logTextView = findViewById(R.id.logTextView)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
+        waveformView = findViewById(R.id.waveformView)
 
         startButton.setOnClickListener { startService() }
         stopButton.setOnClickListener { stopService() }
@@ -250,6 +252,8 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
                 message
             }
             addLog("ERROR: $errorMsg")
+            // Set waveform to red on error
+            waveformView.setState(com.uh.ui.WaveformView.State.ERROR)
         }
     }
 
@@ -299,21 +303,18 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     // Audio capture callbacks
     
     override fun onAudioLevelChanged(level: Float) {
-        // This will be called frequently (~10 times per second)
-        // We'll update UI in the next step when we add the audio level meter
-        // For now, just log occasionally for testing
-        // Uncomment to see audio levels in log:
-        // if (System.currentTimeMillis() % 1000 < 100) {
-        //     runOnUiThread { addLog("Audio level: ${(level * 100).toInt()}%") }
-        // }
+        // Update waveform with audio level
+        waveformView.addSample(level)
     }
     
     override fun onListeningStateChanged(listening: Boolean) {
         runOnUiThread {
             if (listening) {
                 addLog("Listening started - microphone active")
+                waveformView.setState(com.uh.ui.WaveformView.State.IDLE)
             } else {
                 addLog("Listening stopped")
+                waveformView.clear()
             }
         }
     }
@@ -324,6 +325,15 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         runOnUiThread {
             val langLabel = language?.let { "[$it]" } ?: ""
             addLog("Speech $langLabel (${processingTimeMs}ms): \"$text\"")
+            // Return to idle state after transcription completes
+            waveformView.setState(com.uh.ui.WaveformView.State.IDLE)
+        }
+    }
+    
+    override fun onProcessingStarted() {
+        runOnUiThread {
+            // Set waveform to yellow during recognition
+            waveformView.setState(com.uh.ui.WaveformView.State.RECOGNIZING)
         }
     }
 }

@@ -72,6 +72,7 @@ class UhService : Service() {
         
         // Speech recognition callbacks
         fun onTranscriptionReceived(text: String, language: String?, processingTimeMs: Long)
+        fun onProcessingStarted()
     }
 
     // Service binding
@@ -265,6 +266,7 @@ class UhService : Service() {
                     
                     override fun onProcessingStarted() {
                         Log.d(TAG, "Speech processing started")
+                        listener?.onProcessingStarted()
                     }
                     
                     override fun onError(error: Exception) {
