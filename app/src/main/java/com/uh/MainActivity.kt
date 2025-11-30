@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
     private lateinit var waveformView: com.uh.ui.WaveformView
+    private lateinit var dbMeterView: com.uh.ui.DbMeterView
 
     private var uhService: UhService? = null
     private var serviceBound: Boolean = false
@@ -86,6 +87,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
         waveformView = findViewById(R.id.waveformView)
+        dbMeterView = findViewById(R.id.dbMeterView)
 
         startButton.setOnClickListener { startService() }
         stopButton.setOnClickListener { stopService() }
@@ -303,8 +305,9 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     // Audio capture callbacks
     
     override fun onAudioLevelChanged(level: Float) {
-        // Update waveform with audio level
+        // Update waveform and DB meter with audio level
         waveformView.addSample(level)
+        dbMeterView.addSample(level)
     }
     
     override fun onListeningStateChanged(listening: Boolean) {
@@ -315,6 +318,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             } else {
                 addLog("Listening stopped")
                 waveformView.clear()
+                dbMeterView.clear()
             }
         }
     }

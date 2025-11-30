@@ -40,6 +40,11 @@ class AudioCaptureManager {
         private const val BUFFER_SIZE_MS = 100
         private const val BUFFER_SIZE_SAMPLES = SAMPLE_RATE * BUFFER_SIZE_MS / 1000
         private const val BUFFER_SIZE_BYTES = BUFFER_SIZE_SAMPLES * 2
+        
+        // Gain amplification: increase microphone sensitivity
+        // Default 3.0x gain to compensate for quiet microphone
+        // Can be adjusted via setGain()
+        private const val DEFAULT_GAIN = 3.0f
     }
     
     // Audio recording state
@@ -50,6 +55,10 @@ class AudioCaptureManager {
     // Audio level monitoring (thread-safe volatile)
     @Volatile
     private var currentAudioLevel: Float = 0f
+    
+    // Gain amplification (thread-safe volatile)
+    @Volatile
+    private var gain: Float = DEFAULT_GAIN
     
     /**
      * Listener interface for audio data and status updates.
@@ -173,7 +182,10 @@ class AudioCaptureManager {
                     samplesRead > 0 -> {
                         val timestamp = System.currentTimeMillis()
                         
-                        // Calculate audio level (RMS)
+                        // Apply gain amplification (modifies buffer in-place)
+                        applyGain(buffer, samplesRead, gain)
+                        
+                        // Calculate audio level (RMS) - AFTER gain applied
                         val level = calculateAudioLevel(buffer, samplesRead)
                         currentAudioLevel = level
                         
@@ -211,6 +223,24 @@ class AudioCaptureManager {
         } finally {
             audioRecord?.stop()
             Log.d(TAG, "AudioRecord stopped")
+        }
+    }
+    
+    /**
+     * Apply gain amplification to audio buffer (in-place modification).
+     * Prevents clipping by clamping to Short range.
+     * 
+     * @param buffer Audio samples to amplify
+     * @param length Valid sample count
+     * @param gainMultiplier Gain factor (1.0 = no change, >1.0 = louder)
+     */
+    private fun applyGain(buffer: ShortArray, length: Int, gainMultiplier: Float) {
+        if (gainMultiplier == 1.0f) return  // Skip if no gain
+        
+        for (i in 0 until length) {
+            // Apply gain and clamp to prevent overflow
+            val amplified = (buffer[i] * gainMultiplier).toInt()
+            buffer[i] = amplified.coerceIn(Short.MIN_VALUE.toInt(), Short.MAX_VALUE.toInt()).toShort()
         }
     }
     
@@ -279,4 +309,23 @@ class AudioCaptureManager {
      * @return Audio level 0.0-1.0
      */
     fun getCurrentAudioLevel(): Float = currentAudioLevel
+    
+    /**
+     * Set gain amplification for microphone input.
+     * Can be adjusted in real-time while recording.
+     * 
+     * @param gainMultiplier Gain factor (1.0 = no change, 3.0 = 3x louder, etc.)
+     *                       Recommended range: 1.0 - 10.0
+     */
+    fun setGain(gainMultiplier: Float) {
+        require(gainMultiplier > 0f) { "Gain must be positive" }
+        gain = gainMultiplier
+        Log.i(TAG, "Gain set to ${gainMultiplier}x")
+    }
+    
+    /**
+     * Get current gain multiplier.
+     * @return Current gain factor
+     */
+    fun getGain(): Float = gain
 }
