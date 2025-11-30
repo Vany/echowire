@@ -180,6 +180,12 @@ Ping: WebSocket frame-level ping (not JSON)
 - **High-priority thread**: THREAD_PRIORITY_URGENT_AUDIO for real-time performance
 - **RMS audio level calculation**: Root Mean Square for energy-based level monitoring
 - **Audio source**: VOICE_RECOGNITION (optimized for speech vs VOICE_COMMUNICATION)
+- **Hardware noise removal** (2024-11-30): 
+  - **Noise Suppressor** - removes background noise (most important)
+  - **Automatic Gain Control** - normalizes volume levels
+  - **Acoustic Echo Canceler** - removes speaker echo
+  - All hardware-accelerated when available
+  - Graceful fallback if not supported by device
 
 **Thread Safety:**
 - AtomicBoolean for recording state

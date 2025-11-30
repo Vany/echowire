@@ -3,6 +3,9 @@ package com.uh.audio
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.media.audiofx.AcousticEchoCanceler
+import android.media.audiofx.AutomaticGainControl
+import android.media.audiofx.NoiseSuppressor
 import android.util.Log
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.sqrt
@@ -57,6 +60,11 @@ class AudioCaptureManager {
     private var audioRecord: AudioRecord? = null
     private var recordingThread: Thread? = null
     private val isRecording = AtomicBoolean(false)
+    
+    // Hardware noise removal (created when AudioRecord initialized)
+    private var noiseSuppressor: NoiseSuppressor? = null
+    private var automaticGainControl: AutomaticGainControl? = null
+    private var acousticEchoCanceler: AcousticEchoCanceler? = null
     
     // Audio level monitoring (thread-safe volatile)
     @Volatile
@@ -128,8 +136,62 @@ class AudioCaptureManager {
             throw IllegalStateException("Failed to initialize AudioRecord")
         }
         
+        // Initialize hardware noise removal effects
+        initializeAudioEffects()
+        
         Log.i(TAG, "AudioRecord initialized: source=${getAudioSourceName(DEFAULT_AUDIO_SOURCE)}, buffer=$bufferSize bytes, min=$minBufferSize bytes, gain=${DEFAULT_GAIN}x")
         return bufferSize
+    }
+    
+    /**
+     * Initialize hardware audio effects (noise suppressor, AGC, AEC).
+     * These are hardware-accelerated when available.
+     * Falls back gracefully if not supported by device.
+     */
+    private fun initializeAudioEffects() {
+        val audioSessionId = audioRecord?.audioSessionId ?: return
+        
+        // Noise Suppressor - removes background noise (MOST IMPORTANT for your case)
+        if (NoiseSuppressor.isAvailable()) {
+            try {
+                noiseSuppressor = NoiseSuppressor.create(audioSessionId)?.apply {
+                    enabled = true
+                }
+                Log.i(TAG, "Noise Suppressor: ${if (noiseSuppressor?.enabled == true) "ENABLED" else "FAILED"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create Noise Suppressor", e)
+            }
+        } else {
+            Log.w(TAG, "Noise Suppressor: NOT AVAILABLE on this device")
+        }
+        
+        // Automatic Gain Control - normalizes volume levels
+        if (AutomaticGainControl.isAvailable()) {
+            try {
+                automaticGainControl = AutomaticGainControl.create(audioSessionId)?.apply {
+                    enabled = true
+                }
+                Log.i(TAG, "Automatic Gain Control: ${if (automaticGainControl?.enabled == true) "ENABLED" else "FAILED"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create Automatic Gain Control", e)
+            }
+        } else {
+            Log.w(TAG, "Automatic Gain Control: NOT AVAILABLE on this device")
+        }
+        
+        // Acoustic Echo Canceler - removes speaker echo (useful if playing audio while recording)
+        if (AcousticEchoCanceler.isAvailable()) {
+            try {
+                acousticEchoCanceler = AcousticEchoCanceler.create(audioSessionId)?.apply {
+                    enabled = true
+                }
+                Log.i(TAG, "Acoustic Echo Canceler: ${if (acousticEchoCanceler?.enabled == true) "ENABLED" else "FAILED"}")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to create Acoustic Echo Canceler", e)
+            }
+        } else {
+            Log.w(TAG, "Acoustic Echo Canceler: NOT AVAILABLE on this device")
+        }
     }
     
     /**
@@ -295,6 +357,17 @@ class AudioCaptureManager {
     fun release() {
         stopCapture()
         
+        // Release audio effects first
+        noiseSuppressor?.release()
+        noiseSuppressor = null
+        
+        automaticGainControl?.release()
+        automaticGainControl = null
+        
+        acousticEchoCanceler?.release()
+        acousticEchoCanceler = null
+        
+        // Then release AudioRecord
         audioRecord?.release()
         audioRecord = null
         
