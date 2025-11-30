@@ -30,6 +30,30 @@ struct RandomMessage {
     timestamp: i64,
 }
 
+#[derive(Debug, Deserialize)]
+struct SpeechMessage {
+    #[serde(rename = "type")]
+    msg_type: String,
+    text: String,
+    embedding: Vec<f32>,
+    language: String,
+    timestamp: i64,
+    segment_start: i64,
+    segment_end: i64,
+    processing_time_ms: i64,
+    audio_duration_ms: i64,
+    rtf: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct AudioStatusMessage {
+    #[serde(rename = "type")]
+    msg_type: String,
+    listening: bool,
+    audio_level: f32,
+    timestamp: i64,
+}
+
 #[derive(Debug, Serialize)]
 struct ConfigureRequest {
     configure: String,
@@ -413,25 +437,72 @@ async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
 
 /// Parse and display received message.
 fn handle_message(text: &str) {
-    match serde_json::from_str::<RandomMessage>(text) {
-        Ok(msg) if msg.msg_type == "random" => {
-            // Format timestamp as human-readable time
+    // Try to parse as speech message first
+    if let Ok(msg) = serde_json::from_str::<SpeechMessage>(text) {
+        if msg.msg_type == "speech" {
             let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
                 .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
                 .unwrap_or_else(|| msg.timestamp.to_string());
-
-            println!("[{}] Random: {}", datetime, msg.value);
-        }
-        Ok(_) => {
-            println!("Unknown message type: {}", text);
-        }
-        Err(_) => {
-            // Check if it's a configure response
-            if let Ok(response) = serde_json::from_str::<ConfigureResponse>(text) {
-                println!("Config: {} = {}", response.configure, response.value);
-            } else {
-                println!("Raw message: {}", text);
-            }
+            
+            // Display text with language and timing
+            println!("[{}] Speech [{}] ({:.0}ms, RTF={:.2f}): \"{}\"", 
+                datetime, 
+                msg.language, 
+                msg.processing_time_ms as f32,
+                msg.rtf,
+                msg.text
+            );
+            
+            // Show embedding preview (first 5 values)
+            let embedding_preview: Vec<String> = msg.embedding
+                .iter()
+                .take(5)
+                .map(|v| format!("{:.4}", v))
+                .collect();
+            println!("      Embedding: [{}...] ({} dims)", 
+                embedding_preview.join(", "), 
+                msg.embedding.len()
+            );
+            return;
         }
     }
+    
+    // Try to parse as audio status message
+    if let Ok(msg) = serde_json::from_str::<AudioStatusMessage>(text) {
+        if msg.msg_type == "audio_status" {
+            let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
+                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
+                .unwrap_or_else(|| msg.timestamp.to_string());
+            
+            let status = if msg.listening { "LISTENING" } else { "IDLE" };
+            let level_bar = "█".repeat((msg.audio_level * 20.0) as usize);
+            println!("[{}] Audio: {} | Level: {:<20} {:.1}%", 
+                datetime, 
+                status,
+                level_bar,
+                msg.audio_level * 100.0
+            );
+            return;
+        }
+    }
+    
+    // Try to parse as random message (legacy)
+    if let Ok(msg) = serde_json::from_str::<RandomMessage>(text) {
+        if msg.msg_type == "random" {
+            let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
+                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
+                .unwrap_or_else(|| msg.timestamp.to_string());
+            println!("[{}] Random: {}", datetime, msg.value);
+            return;
+        }
+    }
+    
+    // Try to parse as configure response
+    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(text) {
+        println!("Config: {} = {}", response.configure, response.value);
+        return;
+    }
+    
+    // Unknown message format
+    println!("Raw message: {}", text);
 }
