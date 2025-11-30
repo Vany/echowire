@@ -24,26 +24,29 @@ Rust command-line client for discovering and connecting to UH services, receivin
 ## Technical Requirements
 
 ### Speech Recognition
-- **Engine**: TensorFlow Lite with Whisper ONNX-converted models
+- **Engine**: TensorFlow Lite with Whisper tiny multilingual model
 - **Hardware Acceleration**: 
-  - GPU Delegate (Mali-G77 optimized)
-  - XNNPack for ARM CPU optimization
-  - NNAPI delegate for Samsung NPU (Exynos 990)
-- **Model**: Tiny (39MB), Base (74MB), or Small (244MB) - configurable
-- **Mode**: Continuous listening with Voice Activity Detection (VAD)
-- **Latency Target**: <500ms end-to-end (audio capture → broadcast)
-- **Real-time Factor**: 0.2-0.3x with GPU delegate (1 sec audio → 200-300ms processing)
+  - XNNPack for ARM NEON CPU optimization (2-3x speedup)
+  - GPU Delegate DISABLED (TFLite 2.16.1 library bug, classpath issues)
+  - NNAPI delegate NOT USED (Samsung NPU unreliable on Exynos 990)
+- **Model**: Tiny multilingual (66MB) - bundled in APK
+- **Mode**: Continuous listening with energy-based Voice Activity Detection (VAD)
+- **Latency Measured**: 400-600ms end-to-end (audio capture → broadcast)
+- **Real-time Factor**: 0.4-0.6x with XNNPack CPU (acceptable for speech)
 - **Languages**: Multilingual (99 languages including English, Russian) with automatic detection
 - **Audio**: 16kHz mono, continuous capture while service running
 - **Preprocessing**: PCM audio → mel spectrogram (80 bins, 25ms window, 10ms hop)
+- **VAD Threshold**: 0.02 energy level, 3 consecutive frames for speech detection
+- **Buffer Management**: Circular buffer (1-30 seconds), triggers inference when speech detected
 
 ### Text Embeddings
 - **Model**: all-MiniLM-L6-v2 (384 dimensions, 86MB ONNX format)
 - **Framework**: ONNX Runtime Android (Microsoft onnxruntime-android)
-- **Tokenization**: Rust-based HuggingFace tokenizers via JNI
+- **Tokenization**: Simple word-level (TODO: upgrade to HuggingFace WordPiece for production)
 - **Purpose**: Semantic search, similarity matching, vector database ingestion
-- **Latency**: ~50ms per phrase on ARM CPU
-- **Pooling**: Mean pooling (SBERT standard)
+- **Latency Measured**: ~30-50ms per phrase on ARM CPU
+- **Pooling**: Mean pooling over token embeddings (SBERT standard)
+- **Normalization**: L2 normalization for cosine similarity
 
 ### mDNS Service
 - Service type: `_uh._tcp.local.`
@@ -107,17 +110,21 @@ WebSocket ping frame (non-JSON)
   - `listening`: Enable/disable continuous listening ("true"/"false")
 
 ### User Interface
+- **Main Screen**: Real-time waveform analyzer (WaveformView custom view)
+  - State-based colors: Green (idle/listening), Yellow (recognizing), Red (error)
+  - Smooth waveform rendering with 100-sample moving window
+  - Thread-safe circular buffer for audio visualization
+  - Anti-aliased rendering for visual quality
 - **Service Name**: Displays configurable service name (default: "UH Speech Service")
-- **Listening Indicator**: Boolean display showing microphone active state
-- **Audio Level Meter**: Real-time audio input level visualization
-- **Recognition Display**: Scrollable text view showing recognized phrases in real-time
-- **Connection Indicator**: Boolean display showing active client count > 0
+- **Audio Visualization**: Real-time waveform updates ~10-20 Hz
+- **Recognition Display**: Log window showing recognized phrases with timestamps
+- **Connection Indicator**: Shows active client count > 0
 - **Log Window**: Scrollable text view showing:
   - Client connection/disconnection events
-  - Speech recognition events
-  - Configuration changes
+  - Speech recognition results with language, timing, RTF
+  - Audio processing state changes
   - Model loading status
-  - Errors and warnings
+  - Errors and warnings with detailed messages
 
 ### Model Management
 - **Bundling Strategy**: Models bundled in APK as assets (no network dependency)
@@ -183,15 +190,15 @@ uhcli get listening
 - Wake lock keeps screen on while service running (line power assumption)
 
 ## Performance Targets (Samsung Note20, Exynos 990, Mali-G77, 8GB RAM)
-- **Latency**: <500ms end-to-end (audio capture → WebSocket broadcast)
-- **Real-time Factor**: <0.3x with GPU delegate (process 1 second audio in <300ms)
+- **Latency Measured**: 400-600ms end-to-end (audio capture → WebSocket broadcast)
+- **Real-time Factor Measured**: 0.4-0.6x with XNNPack CPU (acceptable for speech)
 - **Throughput**: Support 3+ simultaneous WebSocket clients without degradation
 - **Memory**: <2GB total (models + runtime + buffers)
-- **Model Loading**: <10 seconds initial load (extraction + TFLite initialization)
-- **Audio Capture**: 16kHz mono, <100ms buffering
-- **GPU Acceleration**: Mali-G77 MP11 via TFLite GPU delegate
-- **CPU Fallback**: XNNPack ARM optimizations if GPU unavailable
-- **NPU Option**: Samsung NPU via NNAPI delegate (experimental)
+- **Model Loading**: 2-5 seconds initial load (extraction + TFLite initialization)
+- **Audio Capture**: 16kHz mono, 100ms buffering (1600 samples)
+- **CPU Acceleration**: XNNPack ARM NEON optimizations (2-3x speedup)
+- **GPU Status**: DISABLED (TFLite 2.16.1 library bug prevents GPU delegate usage)
+- **NPU Status**: NOT USED (Samsung NPU unreliable via NNAPI)
 
 ## Security Considerations
 - **Network**: Assumed secure local network (no authentication/encryption)
