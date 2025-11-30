@@ -93,7 +93,87 @@
 
 **See MODEL_TEST_RESULTS.md for detailed analysis**
 
-### Phase 10: Language Detection Fix (CURRENT - 30 minutes)
+### Phase 10: Multiple Inference Implementations ✅ COMPLETE
+
+**Implemented modular inference architecture with interface-based design:**
+
+#### New Architecture Components ✅
+- [x] Create `WhisperInference` interface (common contract)
+- [x] Implement `UsefulSensorsWhisper` (existing monolithic model)
+- [x] Implement `VilassnWhisper` (encoder-decoder split) - SKELETON READY
+- [x] Create `WhisperInferenceFactory` (model selection)
+- [x] Update `SpeechRecognitionManager` to use interface
+- [x] Add `InferenceResult` with RTF calculation
+
+#### Benefits ✅
+- **Flexibility**: Easy to swap models without changing caller code
+- **Comparison**: Can test multiple models side-by-side
+- **Extensibility**: New models just implement interface
+- **Metadata**: Each model provides its own ModelInfo
+
+#### Current Status
+- **UsefulSensorsWhisper**: Fully functional (existing model)
+  - Model: whisper_tiny.tflite (66MB)
+  - Performance: 743-776ms, RTF 0.09-0.96x
+  - Issue: Language detection outputs Russian for English
+  
+- **VilassnWhisper**: Skeleton implemented, needs completion
+  - Encoder: IMPLEMENTED (mel → features)
+  - Decoder: PLACEHOLDER (needs autoregressive loop)
+  - Next: Download vilassn models and implement decoder
+
+#### Usage
+```kotlin
+// Default (UsefulSensors)
+val inference = WhisperInferenceFactory.createDefault(context, modelsDir)
+
+// Explicit selection
+val inference = WhisperInferenceFactory.create(
+    context,
+    WhisperInferenceFactory.ModelType.USEFUL_SENSORS_TINY,
+    modelsDir
+)
+
+// When vilassn models available
+val inference = WhisperInferenceFactory.create(
+    context,
+    WhisperInferenceFactory.ModelType.VILASSN_TINY_ENCODER_DECODER,
+    modelsDir
+)
+```
+
+### Phase 11: Vilassn Decoder Implementation (NEXT - 2-4 hours)
+
+**Download vilassn models and complete decoder:**
+
+#### Download Models (30 min)
+- [ ] Clone vilassn/whisper_android repository
+- [ ] Extract encoder model: whisper-tiny-encoder.tflite
+- [ ] Extract decoder model: whisper-tiny-decoder.tflite
+- [ ] Copy to app/src/main/assets/models/
+- [ ] Verify models load and inspect tensor signatures
+
+#### Implement Decoder Loop (2-3 hours)
+- [ ] Inspect decoder input/output tensor shapes
+- [ ] Understand decoder signature (features + tokens → logits)
+- [ ] Implement autoregressive loop:
+  - [ ] Initialize with [SOT, language, no_timestamps]
+  - [ ] Feed features + previous tokens
+  - [ ] Apply argmax to get next token
+  - [ ] Append to sequence
+  - [ ] Stop at EOS or max_length
+- [ ] Add proper error handling
+- [ ] Test with real audio
+
+#### Integration Testing (30 min)
+- [ ] Test encoder-decoder pipeline end-to-end
+- [ ] Compare with UsefulSensors model
+- [ ] Verify language detection works correctly
+- [ ] Measure performance (should be similar ~700ms)
+
+### Phase 12: Language Detection Fix (Alternative to Phase 11)
+
+**If vilassn decoder is too complex, use text-based detection:**
 
 **Problem**: Model outputs Russian language token (50263) for English speech  
 **Impact**: Language field shows "ru" instead of "en", but transcription works correctly

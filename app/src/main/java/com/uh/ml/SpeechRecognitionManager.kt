@@ -35,7 +35,7 @@ class SpeechRecognitionManager(
     
     // Components
     private val audioPreprocessor = AudioPreprocessor()
-    private lateinit var whisperModel: WhisperModel
+    private lateinit var whisperInference: WhisperInference
     private lateinit var tokenizer: WhisperTokenizer
     private lateinit var embeddingManager: EmbeddingManager
     
@@ -113,11 +113,16 @@ class SpeechRecognitionManager(
         val startTime = System.currentTimeMillis()
         
         try {
-            // Load Whisper model
+            // Load Whisper model (use factory with default model)
             Log.d(TAG, "Loading Whisper model from: ${modelFile.absolutePath}")
-            whisperModel = WhisperModel(context, modelFile)
-            whisperModel.load()
-            Log.i(TAG, "✓ Whisper model loaded")
+            val modelsDir = modelFile.parentFile
+            whisperInference = WhisperInferenceFactory.createDefault(context, modelsDir!!)
+            whisperInference.load()
+            
+            val modelInfo = whisperInference.getModelInfo()
+            Log.i(TAG, "✓ Whisper model loaded: ${modelInfo.name} (${modelInfo.provider})")
+            Log.i(TAG, "  Architecture: ${modelInfo.architecture}")
+            Log.i(TAG, "  Size: ${modelInfo.sizeBytes / (1024 * 1024)} MB")
             
             // Load tokenizer
             Log.d(TAG, "Loading tokenizer from: ${vocabFile.absolutePath}")
@@ -134,7 +139,6 @@ class SpeechRecognitionManager(
             
             val loadTime = System.currentTimeMillis() - startTime
             Log.i(TAG, "Initialization complete in ${loadTime}ms")
-            Log.i(TAG, "GPU enabled: ${whisperModel.isGpuEnabled}")
             
         } catch (e: Exception) {
             Log.e(TAG, "Initialization failed", e)
@@ -239,9 +243,11 @@ class SpeechRecognitionManager(
             
             // 3. Inference - mel spectrogram to token IDs
             val inferenceStart = System.currentTimeMillis()
-            val tokenIds = whisperModel.runInference(melSpectrogram)
-            val inferenceTime = System.currentTimeMillis() - inferenceStart
-            Log.d(TAG, "Inference: ${tokenIds.size} tokens in ${inferenceTime}ms")
+            val audioLengthMs = (audioSamples.size * 1000L) / SAMPLE_RATE
+            val result = whisperInference.runInference(melSpectrogram, audioLengthMs)
+            val inferenceTime = result.inferenceTimeMs
+            val tokenIds = result.tokenIds
+            Log.d(TAG, "Inference: ${tokenIds.size} tokens in ${inferenceTime}ms (RTF: ${"%.2f".format(result.realTimeFactor)})")
             
             // 4. Decoding - token IDs to text
             val decodeStart = System.currentTimeMillis()
@@ -379,7 +385,7 @@ class SpeechRecognitionManager(
         
         // Close models
         if (isInitialized.get()) {
-            whisperModel.close()
+            whisperInference.close()
             embeddingManager.close()
         }
         
