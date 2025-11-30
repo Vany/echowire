@@ -63,7 +63,36 @@
 
 ## 🚧 REMAINING WORK
 
-### Phase 9: Testing & Validation
+### Phase 9: Model Pipeline Verification & Device Testing (CURRENT PHASE)
+**Status**: AUDIT COMPLETE - READY FOR DEVICE TESTING
+
+#### Pre-Testing Verification ✅
+- [x] Download whisper model from usefulsensors
+- [x] Verify model file integrity (66.16 MB, valid TFLite)
+- [x] Verify JSON vocabulary exists (51,865 tokens)
+- [x] Verify binary vocabulary exists (289.9 KB)
+- [x] Audit code pipeline for correctness
+
+#### Critical Testing Required (30 minutes)
+**Goal**: Determine model output format (INT32 vs FLOAT32)
+
+- [ ] Install on Samsung Note20 (`make install`)
+- [ ] Start log monitoring (`make logs`)
+- [ ] Observe model loading logs
+- [ ] **CRITICAL**: Record output tensor shape and dtype
+- [ ] Speak into device and trigger inference
+- [ ] **CRITICAL**: Check if token IDs are sensible (0-51865 range)
+- [ ] Verify token decoding produces readable text
+- [ ] Check language detection accuracy
+
+**See WHISPER_MODEL_AUDIT.md for detailed test procedures and diagnosis tree**
+
+#### Potential Fixes (if needed, 1-2 hours)
+- [ ] If model outputs FLOAT32: Implement argmax in WhisperModel.kt
+- [ ] If wrong vocabulary: Switch from JSON to binary vocab
+- [ ] If model issues: Download vilassn/whisper_android reference model
+
+### Phase 10: Testing & Validation
 #### Device Testing (Physical Device Required)
 - [ ] Install on Samsung Note20 (8GB RAM, Exynos 990)
 - [ ] Verify model extraction (check internal storage files)
