@@ -252,7 +252,19 @@ class SpeechRecognitionManager(
                 
                 // 5. Language detection
                 val language = stats.language
-                Log.d(TAG, "Language: $language")
+                Log.d(TAG, "Detected language: $language")
+                
+                // 5.1. Language filtering - accept only Russian and English
+                val allowedLanguages = setOf("ru", "en")
+                if (language !in allowedLanguages) {
+                    Log.w(TAG, "LANGUAGE FILTER: Detected '$language' but only accepting 'ru' or 'en'. Skipping transcription: \"$text\"")
+                    Log.i(TAG, "Buffer cleared. Waiting for Russian or English speech...")
+                    // Clear buffer and return without notifying listener
+                    audioBuffer.clear()
+                    return
+                }
+                
+                Log.i(TAG, "Language accepted: $language - \"$text\"")
                 
                 // 6. Generate embedding for recognized text
                 val embeddingStart = System.currentTimeMillis()
