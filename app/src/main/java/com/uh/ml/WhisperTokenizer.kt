@@ -107,21 +107,38 @@ class WhisperTokenizer(private val vocabFile: File) {
             val vocab = mutableMapOf<Int, String>()
             
             // Parse JSON: {"0": "!", "1": "\"", ...}
-            vocabObject.keys().forEach { key ->
+            // CRITICAL: Must iterate properly over ALL keys
+            val keys = vocabObject.keys()
+            var keyCount = 0
+            
+            while (keys.hasNext()) {
+                val key = keys.next()
+                keyCount++
+                
                 val tokenId = key.toIntOrNull()
                 if (tokenId != null) {
                     val tokenText = vocabObject.getString(key)
                     vocab[tokenId] = tokenText
+                } else {
+                    Log.w(TAG, "Skipping non-integer key: $key")
                 }
             }
             
+            Log.i(TAG, "Processed $keyCount keys from JSON")
             Log.i(TAG, "Loaded ${vocab.size} tokens from vocabulary")
+            
+            if (vocab.size < 50000) {
+                Log.e(TAG, "WARNING: Only loaded ${vocab.size} tokens, expected ~51865!")
+                Log.e(TAG, "Vocabulary may be incomplete or corrupted!")
+            }
+            
             isLoaded = true
             
             return vocab.toMap()
             
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load vocabulary", e)
+            e.printStackTrace()
             throw IllegalArgumentException("Vocabulary loading failed: ${e.message}", e)
         }
     }
