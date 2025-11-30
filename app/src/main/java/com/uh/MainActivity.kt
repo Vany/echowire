@@ -242,12 +242,6 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         }
     }
 
-    override fun onRandomNumberGenerated(value: Long, timestamp: Long) {
-        runOnUiThread {
-            addLog("Random: $value")
-        }
-    }
-
     override fun onError(message: String, exception: Exception?) {
         runOnUiThread {
             val errorMsg = if (exception != null) {

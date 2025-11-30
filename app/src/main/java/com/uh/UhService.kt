@@ -58,7 +58,6 @@ class UhService : Service() {
         fun onServiceStopped()
         fun onClientConnected(address: String, totalClients: Int)
         fun onClientDisconnected(address: String, totalClients: Int)
-        fun onRandomNumberGenerated(value: Long, timestamp: Long)
         fun onError(message: String, exception: Exception?)
         fun onConfigChanged(key: String, value: String?)
         
@@ -600,17 +599,9 @@ class UhService : Service() {
     }
 
     private fun startScheduledTasks() {
-        scheduler = Executors.newScheduledThreadPool(2)
+        scheduler = Executors.newScheduledThreadPool(1)
 
-        // Schedule random number generation
-        scheduler?.scheduleAtFixedRate(
-            { generateAndBroadcastRandomNumber() },
-            0,
-            config.randomNumberIntervalMs,
-            TimeUnit.MILLISECONDS
-        )
-
-        // Schedule ping
+        // Schedule ping only (removed random number generation)
         scheduler?.scheduleAtFixedRate(
             { sendPingToClients() },
             config.pingIntervalMs,
@@ -618,27 +609,7 @@ class UhService : Service() {
             TimeUnit.MILLISECONDS
         )
 
-        Log.i(TAG, "Scheduled tasks started")
-    }
-
-    private fun generateAndBroadcastRandomNumber() {
-        try {
-            val randomValue = Random.nextLong(0, 1_000_000)
-            val timestamp = System.currentTimeMillis()
-
-            val message = JSONObject().apply {
-                put("type", "random")
-                put("value", randomValue)
-                put("timestamp", timestamp)
-            }.toString()
-
-            webSocketServer?.broadcastMessage(message)
-            listener?.onRandomNumberGenerated(randomValue, timestamp)
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating random number", e)
-            listener?.onError("Random number generation error", e)
-        }
+        Log.i(TAG, "Scheduled tasks started (ping only)")
     }
 
     private fun sendPingToClients() {
@@ -711,8 +682,8 @@ class UhService : Service() {
                 
                 override fun onAudioLevel(level: Float) {
                     listener?.onAudioLevelChanged(level)
-                    // Broadcast audio status to WebSocket clients
-                    broadcastAudioStatus(level)
+                    // Audio status no longer broadcast continuously
+                    // Only speech recognition results are sent via WebSocket
                 }
                 
                 override fun onError(error: Exception) {
@@ -820,34 +791,6 @@ class UhService : Service() {
         }
     }
     
-    /**
-     * Broadcast audio status to all WebSocket clients
-     * Called periodically (~10 times/sec) with current audio level
-     */
-    private fun broadcastAudioStatus(audioLevel: Float) {
-        try {
-            // Only broadcast if WebSocket server is running
-            val server = webSocketServer ?: return
-            
-            // Android 12 JSONObject.put() only accepts Double/Int, not Float
-            val message = JSONObject().apply {
-                put("type", "audio_status")
-                put("listening", isListening)
-                put("audio_level", audioLevel.toDouble())
-                put("timestamp", System.currentTimeMillis())
-            }
-            
-            server.broadcastMessage(message.toString())
-            
-        } catch (e: Exception) {
-            // Don't spam logs for audio status errors
-            // This is called very frequently (10x/sec)
-            if (System.currentTimeMillis() % 5000 < 100) {  // Log only once every 5 seconds
-                Log.e(TAG, "Failed to broadcast audio status", e)
-            }
-        }
-    }
-
     private fun stopAllComponents() {
         // Stop audio capture
         stopListening()

@@ -1555,15 +1555,9 @@ listener?.onTranscription(text, embedding, language, ...)
 - Includes: text, embedding (384 floats), language, timestamps, metadata
 - Uses existing `UhWebSocketServer.broadcastMessage()` infrastructure
 
-**Audio Status Broadcasting:**
-- `broadcastAudioStatus()`: creates JSON with type="audio_status"
-- Called ~10 times/sec in `onAudioLevel()` callback
-- Includes: listening state (boolean), audio_level (0.0-1.0), timestamp
-- Provides real-time feedback to clients
-
-**Message Formats:**
+**Message Format:**
 ```json
-// Speech recognition result
+// Speech recognition result (ONLY message type broadcasted)
 {
   "type": "speech",
   "text": "recognized phrase",
@@ -1576,47 +1570,47 @@ listener?.onTranscription(text, embedding, language, ...)
   "audio_duration_ms": 1000,
   "rtf": 0.65
 }
-
-// Audio status update
-{
-  "type": "audio_status",
-  "listening": true,
-  "audio_level": 0.305,
-  "timestamp": 1234567890123
-}
 ```
+
+**Removed Features (2024-11-30):**
+- ✅ Random number generation completely removed
+  - Removed `generateAndBroadcastRandomNumber()` method
+  - Removed scheduled task for random numbers
+  - Reduced scheduler thread pool from 2 to 1 (ping only)
+  - Removed `onRandomNumberGenerated()` callback from ServiceListener
+  - Removed callback implementation in MainActivity
+- ✅ Audio status broadcasting disabled
+  - Audio level updates still happen locally for UI (onAudioLevelChanged)
+  - WebSocket clients no longer receive continuous audio_status messages
+  - Removed `broadcastAudioStatus()` method
+  - Only speech recognition results are sent via WebSocket now
+
+**Current Scheduled Tasks:**
+- Ping only: sent every 5 seconds to maintain connection health
+- No other periodic broadcasts (speech messages sent on-demand when recognized)
 
 ### CLI Client Implementation (cli/src/main.rs)
 
 **Message Type Handlers:**
-- `SpeechMessage`: deserializes speech recognition results
-- `AudioStatusMessage`: deserializes audio status updates
-- `RandomMessage`: legacy support (backward compatible)
+- `SpeechMessage`: deserializes speech recognition results (PRIMARY)
+- `RandomMessage`: legacy support (no longer sent by server, backward compatible)
 - `ConfigureResponse`: configuration responses
+- **AudioStatusMessage removed** - no longer needed
 
 **Display Format:**
 ```
-Speech messages:
+Speech messages only:
 [12:34:56.789] Speech [en] (650ms, RTF=0.65): "recognized phrase"
       Embedding: [0.1234, -0.5678, 0.9012, -0.3456, 0.7890...] (384 dims)
-
-Audio status:
-[12:34:56.789] Audio: LISTENING | Level: ██████              30.5%
 ```
 
-**Parsing Priority:**
-1. SpeechMessage (primary)
-2. AudioStatusMessage
-3. RandomMessage (legacy)
-4. ConfigureResponse
-5. Raw message (fallback)
-
 **Integration:**
-- Android: audio → speech → embedding → WebSocket broadcast
+- Android: audio → speech → embedding → WebSocket broadcast (speech only)
 - CLI: receives → parses → displays
 - Fire-and-forget broadcast (no replay, no client tracking)
+- Much cleaner WebSocket traffic (no noise, only meaningful data)
 
-**Status:** Phase 6 complete! End-to-end pipeline functional. Ready for device testing.
+**Status:** Phase 6 complete! Optimized for speech-only broadcasting. Ready for device testing.
 
 ## Critical Android Platform Limitations
 
