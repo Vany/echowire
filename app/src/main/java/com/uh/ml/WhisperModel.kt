@@ -299,6 +299,14 @@ class WhisperModel(
             
             Log.i(TAG, "Input tensor: $inputInfo")
             Log.i(TAG, "Output tensor: $outputInfo")
+            
+            // CRITICAL: Log exact shapes for debugging
+            val inputTensor = interpreter!!.getInputTensor(0)
+            val outputTensor = interpreter!!.getOutputTensor(0)
+            Log.i(TAG, "Input shape array: ${inputTensor.shape().contentToString()}")
+            Log.i(TAG, "Output shape array: ${outputTensor.shape().contentToString()}")
+            Log.i(TAG, "Output num elements: ${outputTensor.shape().reduce { a, b -> a * b }}")
+            
         } catch (e: Exception) {
             Log.w(TAG, "Failed to log tensor info", e)
         }
