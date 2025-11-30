@@ -3,6 +3,8 @@ package com.uh.ml
 import android.content.Context
 import android.util.Log
 import org.tensorflow.lite.Interpreter
+import org.tensorflow.lite.gpu.CompatibilityList
+import org.tensorflow.lite.gpu.GpuDelegate
 import java.io.File
 import java.io.FileInputStream
 import java.nio.ByteBuffer
@@ -24,14 +26,10 @@ import kotlin.concurrent.withLock
  *   - Vocabulary size: 51865 tokens
  * 
  * Hardware Acceleration:
- * - XNNPack (ARM NEON CPU) - 2-3x speedup
+ * - GPU Delegate (Mali-G77) - TFLite 2.17.0 testing
+ * - XNNPack (ARM NEON CPU) - fallback, 2-3x speedup
  * - 4 threads for parallel operations
- * - Expected: 400-600ms inference for 1s audio (tiny model)
- * 
- * GPU Delegate Status:
- * - Disabled due to TFLite 2.16.1 classpath bug
- * - GpuDelegateFactory$Options not available at runtime
- * - XNNPack sufficient for <500ms target
+ * - Expected: 200-300ms with GPU, 400-600ms with CPU (tiny model)
  * 
  * Thread Safety:
  * - Thread-safe inference via ReentrantLock
@@ -126,12 +124,10 @@ class WhisperModel(
     }
     
     /**
-     * Create interpreter options with CPU acceleration
+     * Create interpreter options with hardware acceleration
      * 
-     * GPU delegate disabled due to TFLite 2.16.1 classpath bug:
-     * GpuDelegateFactory$Options class not available at runtime.
-     * 
-     * XNNPack provides 2-3x ARM NEON speedup, sufficient for <500ms target.
+     * TFLite 2.17.0: Testing GPU delegate - may still have classpath issues
+     * Fallback: XNNPack provides 2-3x ARM NEON speedup
      */
     private fun createInterpreterOptions(): Interpreter.Options {
         val options = Interpreter.Options()
@@ -139,8 +135,28 @@ class WhisperModel(
         // Set thread count for CPU operations
         options.setNumThreads(NUM_THREADS)
         
-        // Enable XNNPack for ARM CPU optimization
-        // Provides 2-3x speedup on ARM NEON (Mali-G77 CPU cores)
+        // Try GPU delegate first (Mali-G77)
+        try {
+            val compatList = CompatibilityList()
+            if (compatList.isDelegateSupportedOnThisDevice) {
+                val delegateOptions = compatList.bestOptionsForThisDevice
+                val gpuDelegate = GpuDelegate(delegateOptions)
+                options.addDelegate(gpuDelegate)
+                
+                Log.i(TAG, "GPU delegate enabled (Mali-G77 via TFLite 2.17.0)")
+                Log.i(TAG, "Expected inference: 200-300ms for 1s audio (tiny model)")
+                isGpuEnabled = true
+                
+                return options
+            } else {
+                Log.w(TAG, "GPU delegate not compatible with this device")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "GPU delegate initialization failed: ${e.message}", e)
+            Log.i(TAG, "Falling back to XNNPack CPU acceleration")
+        }
+        
+        // Fallback: Enable XNNPack for ARM CPU optimization
         options.setUseXNNPACK(true)
         
         Log.i(TAG, "Hardware acceleration: XNNPack (ARM NEON) with $NUM_THREADS threads")
