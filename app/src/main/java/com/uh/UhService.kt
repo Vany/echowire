@@ -486,56 +486,75 @@ class UhService : Service() {
             }
             
             // Acquire multicast lock (required for mDNS on WiFi)
-            multicastLock = wifiManager.createMulticastLock("UhService_mDNS").apply {
+            val lock = wifiManager.createMulticastLock("UhService_mDNS").apply {
                 setReferenceCounted(true)
                 acquire()
             }
+            multicastLock = lock
             Log.d(TAG, "Multicast lock acquired")
             
-            nsdManager = getSystemService(NsdManager::class.java)
-            
-            val serviceInfo = NsdServiceInfo().apply {
-                serviceName = config.mdnsServiceName
-                serviceType = config.mdnsServiceType
-                port = serverPort
-            }
-            
-            Log.d(TAG, "Attempting mDNS registration: name=${serviceInfo.serviceName}, type=${serviceInfo.serviceType}, port=${serviceInfo.port}")
+            try {
+                nsdManager = getSystemService(NsdManager::class.java)
+                
+                val serviceInfo = NsdServiceInfo().apply {
+                    serviceName = config.mdnsServiceName
+                    serviceType = config.mdnsServiceType
+                    port = serverPort
+                }
+                
+                Log.d(TAG, "Attempting mDNS registration: name=${serviceInfo.serviceName}, type=${serviceInfo.serviceType}, port=${serviceInfo.port}")
 
-            registrationListener = object : NsdManager.RegistrationListener {
-                override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    val errorMsg = when (errorCode) {
-                        NsdManager.FAILURE_ALREADY_ACTIVE -> "Service already registered"
-                        NsdManager.FAILURE_INTERNAL_ERROR -> "Internal error"
-                        NsdManager.FAILURE_MAX_LIMIT -> "Max registrations reached"
-                        else -> "Unknown error code: $errorCode"
+                registrationListener = object : NsdManager.RegistrationListener {
+                    override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                        val errorMsg = when (errorCode) {
+                            NsdManager.FAILURE_ALREADY_ACTIVE -> "Service already registered"
+                            NsdManager.FAILURE_INTERNAL_ERROR -> "Internal error"
+                            NsdManager.FAILURE_MAX_LIMIT -> "Max registrations reached"
+                            else -> "Unknown error code: $errorCode"
+                        }
+                        Log.e(TAG, "mDNS registration failed: $errorMsg")
+                        listener?.onError("mDNS registration failed: $errorMsg", null)
                     }
-                    Log.e(TAG, "mDNS registration failed: $errorMsg")
-                    listener?.onError("mDNS registration failed: $errorMsg", null)
+
+                    override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                        Log.e(TAG, "mDNS unregistration failed: $errorCode")
+                    }
+
+                    override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
+                        Log.i(TAG, "mDNS service registered: ${serviceInfo.serviceName}")
+                    }
+
+                    override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
+                        Log.i(TAG, "mDNS service unregistered: ${serviceInfo.serviceName}")
+                    }
                 }
 
-                override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                    Log.e(TAG, "mDNS unregistration failed: $errorCode")
+                nsdManager?.registerService(
+                    serviceInfo,
+                    NsdManager.PROTOCOL_DNS_SD,
+                    registrationListener
+                )
+            } catch (e: Exception) {
+                // CRITICAL: Release multicast lock on registration failure to prevent leak
+                Log.e(TAG, "Failed to register mDNS service", e)
+                listener?.onError("mDNS registration error: ${e.message}", e)
+                
+                // Clean up multicast lock
+                try {
+                    if (lock.isHeld) {
+                        lock.release()
+                        Log.d(TAG, "Multicast lock released after mDNS failure")
+                    }
+                } catch (releaseError: Exception) {
+                    Log.e(TAG, "Failed to release multicast lock after error", releaseError)
                 }
-
-                override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-                    Log.i(TAG, "mDNS service registered: ${serviceInfo.serviceName}")
-                }
-
-                override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
-                    Log.i(TAG, "mDNS service unregistered: ${serviceInfo.serviceName}")
-                }
+                multicastLock = null
+                throw e  // Re-throw to propagate failure
             }
-
-            nsdManager?.registerService(
-                serviceInfo,
-                NsdManager.PROTOCOL_DNS_SD,
-                registrationListener
-            )
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to register mDNS service", e)
-            listener?.onError("mDNS registration error: ${e.message}", e)
+            Log.e(TAG, "Failed to setup mDNS", e)
+            // Error already logged and multicast lock cleaned up above
         }
     }
 
@@ -565,20 +584,26 @@ class UhService : Service() {
     /**
      * Acquire wake lock to prevent screen from turning off while server is running.
      * Uses SCREEN_BRIGHT_WAKE_LOCK to keep screen on - device should be on wire power.
+     * 
+     * CRITICAL: Only assigns wakeLock member after successful acquisition to avoid
+     * attempting to release a non-held lock on error.
      */
     private fun acquireWakeLock() {
         try {
             val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = powerManager.newWakeLock(
+            val lock = powerManager.newWakeLock(
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
                 "UhService::WebSocketServerWakeLock"
-            ).apply {
-                acquire()
-            }
+            )
+            lock.acquire()  // May throw SecurityException or RuntimeException
+            
+            // CRITICAL: Only assign after successful acquire()
+            wakeLock = lock
             Log.i(TAG, "Wake lock acquired - screen will stay on")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acquire wake lock", e)
             listener?.onError("Wake lock acquisition failed: ${e.message}", e)
+            // wakeLock remains null - release will be safe
         }
     }
 
@@ -649,6 +674,10 @@ class UhService : Service() {
     
     /**
      * Start continuous audio capture with VAD.
+     * 
+     * CRITICAL: Captures local references to avoid TOCTOU race conditions.
+     * The callback runs on a high-priority audio thread and must not access
+     * potentially-null member variables that could be cleared during shutdown.
      */
     private fun startListening() {
         if (isListening) {
@@ -662,22 +691,28 @@ class UhService : Service() {
             return
         }
         
+        // CRITICAL: Capture references before starting callback to prevent TOCTOU races
+        // These references remain valid even if member variables are nulled during shutdown
+        val capturedVad = vad
+        val capturedRecognitionManager = speechRecognitionManager
+        
+        if (capturedVad == null || capturedRecognitionManager == null) {
+            Log.e(TAG, "VAD or SpeechRecognitionManager not initialized")
+            return
+        }
+        
         try {
             manager.startCapture(object : AudioCaptureManager.AudioDataListener {
                 override fun onAudioData(audioData: ShortArray, sampleRate: Int, timestamp: Long) {
-                    val currentVad = vad
-                    val recognitionManager = speechRecognitionManager
+                    // Use captured references (thread-safe, immune to nulling)
+                    val level = manager.getCurrentAudioLevel()
+                    val isSpeech = capturedVad.processFrame(level)
                     
-                    if (currentVad != null && recognitionManager != null) {
-                        val level = manager.getCurrentAudioLevel()
-                        val isSpeech = currentVad.processFrame(level)
-                        
-                        // Feed audio to speech recognition manager
-                        recognitionManager.onAudioData(audioData, timestamp, isSpeech)
-                        
-                        if (isSpeech) {
-                            Log.d(TAG, "Speech detected: level=$level, buffer=${recognitionManager.getBufferDuration()}s")
-                        }
+                    // Feed audio to speech recognition manager
+                    capturedRecognitionManager.onAudioData(audioData, timestamp, isSpeech)
+                    
+                    if (isSpeech) {
+                        Log.d(TAG, "Speech detected: level=$level, buffer=${capturedRecognitionManager.getBufferDuration()}s")
                     }
                 }
                 
@@ -760,6 +795,9 @@ class UhService : Service() {
     
     /**
      * Broadcast speech recognition result with embedding to all WebSocket clients
+     * 
+     * CRITICAL: JSONArray on Android 12+ doesn't properly handle List<Float>.
+     * Must convert FloatArray to DoubleArray for correct JSON serialization.
      */
     private fun broadcastSpeechMessage(
         text: String,
@@ -770,11 +808,14 @@ class UhService : Service() {
         processingTimeMs: Long
     ) {
         try {
-            // Android 12 JSONObject.put() only accepts Double/Int, not Float
+            // CRITICAL: Convert FloatArray to DoubleArray for JSON compatibility
+            // Android 12+ JSONArray constructor doesn't handle List<Float> correctly
+            val embeddingDoubles = embedding.map { it.toDouble() }
+            
             val message = JSONObject().apply {
                 put("type", "speech")
                 put("text", text)
-                put("embedding", org.json.JSONArray(embedding.toList()))
+                put("embedding", org.json.JSONArray(embeddingDoubles))
                 put("language", language ?: "unknown")
                 put("timestamp", System.currentTimeMillis())
                 put("segment_start", startTime)
