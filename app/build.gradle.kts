@@ -75,10 +75,18 @@ dependencies {
     // JSON
     implementation("org.json:json:20231013")
     
-    // Speech Recognition - TensorFlow Lite (works on Exynos)
-    implementation("org.tensorflow:tensorflow-lite:2.17.0")
-    implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.17.0")
+    // Speech Recognition - TensorFlow Lite
+    // Using 2.14.0 - last stable version before namespace conflicts
+    // 2.15.0+ has litert-support conflicts and GPU delegate issues
+    implementation("org.tensorflow:tensorflow-lite:2.14.0") {
+        exclude(group = "com.google.ai.edge.litert")
+    }
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4") {
+        exclude(group = "com.google.ai.edge.litert")
+    }
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0") {
+        exclude(group = "com.google.ai.edge.litert")
+    }
     
     // Text Embeddings - ONNX Runtime (works on all ARM64)
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
