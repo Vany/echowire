@@ -445,7 +445,7 @@ fn handle_message(text: &str) {
                 .unwrap_or_else(|| msg.timestamp.to_string());
             
             // Display text with language and timing
-            println!("[{}] Speech [{}] ({:.0}ms, RTF={:.2f}): \"{}\"", 
+            println!("[{}] Speech [{}] ({:.0}ms, RTF={:.2}): \"{}\"", 
                 datetime, 
                 msg.language, 
                 msg.processing_time_ms as f32,
