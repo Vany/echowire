@@ -277,8 +277,7 @@ class UhService : Service() {
                 modelManager.setWhisperLoaded(true)
                 
                 Log.i(TAG, "Whisper loaded, now loading embedding model...")
-                // TODO: Load embedding model (Phase 5)
-                // loadEmbeddingModel()
+                // Embedding model loaded inside SpeechRecognitionManager
                 modelManager.setEmbeddingLoaded(true)
                 
                 Log.i(TAG, "All models loaded successfully!")
@@ -292,8 +291,22 @@ class UhService : Service() {
                 Log.e(TAG, "CRITICAL: Failed to load models - ${e.javaClass.simpleName}: ${e.message}", e)
                 e.printStackTrace()
                 listener?.onError("Failed to load models: ${e.message}", e)
-                // Don't crash the service, but log prominently
-                Log.e(TAG, "Service will continue but speech recognition is NOT available")
+                
+                // IMPORTANT: Do NOT start components if models failed to load
+                // Speech recognition won't work, but WebSocket server can still run
+                Log.e(TAG, "Speech recognition is NOT available - models failed to load")
+                Log.i(TAG, "Starting WebSocket server only (no speech recognition)...")
+                
+                // Start minimal components (WebSocket only, no audio)
+                try {
+                    startWebSocketServer()
+                    startScheduledTasks()
+                    // Do NOT call initializeAudioCapture() - speech recognition is broken
+                } catch (fallbackError: Exception) {
+                    Log.e(TAG, "Failed to start even basic components", fallbackError)
+                    listener?.onError("Service startup failed: ${fallbackError.message}", fallbackError)
+                }
+                
             } catch (e: Error) {
                 Log.e(TAG, "CRITICAL: Fatal error loading models - ${e.javaClass.simpleName}: ${e.message}", e)
                 e.printStackTrace()
@@ -812,6 +825,9 @@ class UhService : Service() {
      */
     private fun broadcastAudioStatus(audioLevel: Float) {
         try {
+            // Only broadcast if WebSocket server is running
+            val server = webSocketServer ?: return
+            
             val message = JSONObject().apply {
                 put("type", "audio_status")
                 put("listening", isListening)
@@ -819,10 +835,14 @@ class UhService : Service() {
                 put("timestamp", System.currentTimeMillis())
             }
             
-            webSocketServer?.broadcastMessage(message.toString())
+            server.broadcastMessage(message.toString())
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to broadcast audio status", e)
+            // Don't spam logs for audio status errors
+            // This is called very frequently (10x/sec)
+            if (System.currentTimeMillis() % 5000 < 100) {  // Log only once every 5 seconds
+                Log.e(TAG, "Failed to broadcast audio status", e)
+            }
         }
     }
 
