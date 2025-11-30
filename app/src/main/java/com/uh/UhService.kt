@@ -739,16 +739,16 @@ class UhService : Service() {
     }
     
     /**
-     * Handle transcription results from SpeechRecognitionManager.
-     * Logs the result and notifies listener for UI updates.
+     * Handle speech recognition result with embedding.
+     * Logs details, notifies UI listener, and broadcasts via WebSocket.
      * 
      * @param text Recognized text
-     * @param language Detected language code (e.g., "en", "ru")
+     * @param embedding 384-dimensional embedding vector
+     * @param language Detected language code
      * @param startTime Audio start timestamp
      * @param endTime Audio end timestamp
      * @param processingTimeMs Time taken to process
      */
-    private fun handleTranscription(
     private fun handleTranscription(
         text: String,
         embedding: FloatArray,
