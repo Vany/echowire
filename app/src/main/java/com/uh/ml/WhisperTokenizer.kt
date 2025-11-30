@@ -21,6 +21,8 @@ import java.io.File
  * Note: Whisper vocabulary file must be downloaded separately
  * from the Whisper repository or extracted from model metadata.
  * This is NOT the same as the SBERT embedding tokenizer.
+ * 
+ * Thread-Safety: Vocabulary loaded eagerly during construction (not lazy).
  */
 class WhisperTokenizer(private val vocabFile: File) {
     
@@ -45,10 +47,8 @@ class WhisperTokenizer(private val vocabFile: File) {
         private const val LANGUAGE_TOKEN_END = 50357
     }
     
-    // Token ID → Text mapping
-    private val tokenToText: Map<Int, String> by lazy {
-        loadVocabulary()
-    }
+    // Token ID → Text mapping (loaded eagerly in init{})
+    private var tokenToText: Map<Int, String> = emptyMap()
     
     // Language code mapping (subset of most common)
     private val languageTokens = mapOf(
@@ -72,6 +72,11 @@ class WhisperTokenizer(private val vocabFile: File) {
     @Volatile
     var isLoaded = false
         private set
+    
+    init {
+        // Load vocabulary eagerly during construction
+        tokenToText = loadVocabulary()
+    }
     
     /**
      * Load vocabulary from JSON file
