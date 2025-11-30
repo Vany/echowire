@@ -1617,3 +1617,46 @@ Audio status:
 - Fire-and-forget broadcast (no replay, no client tracking)
 
 **Status:** Phase 6 complete! End-to-end pipeline functional. Ready for device testing.
+
+## Critical Android Platform Limitations
+
+### JSONObject.put() Type Restrictions (Android 12+)
+
+**Problem:**
+Android's `org.json.JSONObject` only provides overloaded `put()` methods for specific types:
+- `put(String, Double)` ✓
+- `put(String, Int)` ✓
+- `put(String, Long)` ✓
+- `put(String, Boolean)` ✓
+- `put(String, String)` ✓
+- `put(String, Object)` ✓
+- **`put(String, Float)` ✗ DOES NOT EXIST**
+
+**Impact:**
+Attempting to use `put()` with Float values causes runtime crash:
+```
+NoSuchMethodError: No virtual method put(Ljava/lang/String;F)Lorg/json/JSONObject;
+```
+
+**Solution:**
+Always cast Float values to Double before passing to JSONObject:
+```kotlin
+// WRONG - crashes at runtime
+put("audio_level", audioLevel)  // audioLevel is Float
+
+// CORRECT - works
+put("audio_level", audioLevel.toDouble())
+```
+
+**Locations Fixed:**
+- `UhService.broadcastAudioStatus()`: `audioLevel.toDouble()`
+- `UhService.broadcastSpeechMessage()`: RTF calculation uses `toDouble()`
+
+**Root Cause:**
+This is NOT a bug - it's an intentional API design. JSON spec only has Number type (IEEE 754 double precision). Java/Kotlin Float (32-bit) must be promoted to Double (64-bit) for JSON serialization.
+
+**Testing:**
+Verified fix resolves crash on Samsung Note20 (Android 12, Exynos 990).
+
+**Date Discovered:** 2024-11-30  
+**Git Commit:** 95b6fe4
