@@ -135,16 +135,26 @@ class WhisperTokenizer(private val vocabFile: File) {
      */
     fun decode(tokenIds: IntArray, skipSpecialTokens: Boolean = true): String {
         if (!isLoaded || tokenToText.isEmpty()) {
-            throw IllegalStateException("Vocabulary not loaded. Tokenizer not initialized.")
+            val error = "Vocabulary not loaded. Tokenizer not initialized."
+            Log.e(TAG, error)
+            throw IllegalStateException(error)
         }
         
-        val textParts = mutableListOf<String>()
+        Log.d(TAG, "Decoding ${tokenIds.size} tokens (skip_special=$skipSpecialTokens)")
+        Log.d(TAG, "Vocabulary size: ${tokenToText.size}")
+        Log.d(TAG, "First 10 input tokens: ${tokenIds.take(10).joinToString()}")
         
-        for (tokenId in tokenIds) {
+        val textParts = mutableListOf<String>()
+        var skippedTokens = 0
+        var unknownTokens = 0
+        
+        for ((index, tokenId) in tokenIds.withIndex()) {
             // Skip special tokens if requested
             if (skipSpecialTokens && isSpecialToken(tokenId)) {
+                skippedTokens++
                 // Stop at end-of-text token
                 if (tokenId == TOKEN_END_OF_TEXT) {
+                    Log.d(TAG, "Found end-of-text at position $index")
                     break
                 }
                 continue
@@ -154,15 +164,22 @@ class WhisperTokenizer(private val vocabFile: File) {
             val tokenText = tokenToText[tokenId]
             if (tokenText != null) {
                 textParts.add(tokenText)
+                Log.v(TAG, "Token $tokenId → \"$tokenText\"")
             } else {
-                Log.w(TAG, "Unknown token ID: $tokenId")
+                unknownTokens++
+                Log.w(TAG, "Unknown token ID: $tokenId at position $index")
             }
         }
+        
+        Log.d(TAG, "Decode stats: ${textParts.size} text parts, $skippedTokens skipped, $unknownTokens unknown")
         
         // Join tokens and clean up BPE artifacts
         // Whisper BPE uses Ġ (U+0120) to indicate space before token
         val rawText = textParts.joinToString("")
+        Log.d(TAG, "Raw joined text (${rawText.length} chars): \"$rawText\"")
+        
         val cleanedText = cleanBpeArtifacts(rawText)
+        Log.d(TAG, "Cleaned text: \"$cleanedText\"")
         
         return cleanedText.trim()
     }

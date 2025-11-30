@@ -114,15 +114,21 @@ class SpeechRecognitionManager(
         
         try {
             // Load Whisper model
+            Log.d(TAG, "Loading Whisper model from: ${modelFile.absolutePath}")
             whisperModel = WhisperModel(context, modelFile)
             whisperModel.load()
+            Log.i(TAG, "✓ Whisper model loaded")
             
             // Load tokenizer
+            Log.d(TAG, "Loading tokenizer from: ${vocabFile.absolutePath}")
             tokenizer = WhisperTokenizer(vocabFile)
+            Log.i(TAG, "✓ Tokenizer loaded: isLoaded=${tokenizer.isLoaded}")
             
             // Load embedding model
+            Log.d(TAG, "Loading embedding model from: ${embeddingModelFile.absolutePath}")
             embeddingManager = EmbeddingManager(context, embeddingModelFile, embeddingVocabFile)
             embeddingManager.load()
+            Log.i(TAG, "✓ Embedding model loaded")
             
             isInitialized.set(true)
             
@@ -132,6 +138,7 @@ class SpeechRecognitionManager(
             
         } catch (e: Exception) {
             Log.e(TAG, "Initialization failed", e)
+            e.printStackTrace()
             throw e
         }
     }
@@ -238,47 +245,66 @@ class SpeechRecognitionManager(
             
             // 4. Decoding - token IDs to text
             val decodeStart = System.currentTimeMillis()
-            val (text, stats) = tokenizer.decodeWithStats(tokenIds)
-            val decodeTime = System.currentTimeMillis() - decodeStart
-            Log.d(TAG, "Decoding: \"$text\" in ${decodeTime}ms")
-            
-            // 5. Language detection
-            val language = stats.language
-            Log.d(TAG, "Language: $language")
-            
-            // 6. Generate embedding for recognized text
-            val embeddingStart = System.currentTimeMillis()
-            val embedding = if (text.isNotBlank()) {
-                embeddingManager.encode(text.trim())
-            } else {
-                FloatArray(384) { 0f }  // Zero embedding for empty text
-            }
-            val embeddingTime = System.currentTimeMillis() - embeddingStart
-            Log.d(TAG, "Embedding: ${embedding.size} dims in ${embeddingTime}ms")
-            
-            // Total processing time
-            val totalTime = System.currentTimeMillis() - pipelineStart
-            
-            // Update statistics
-            totalInferences++
-            totalInferenceTimeMs += totalTime
-            
-            Log.i(TAG, "Pipeline complete: ${totalTime}ms " +
-                    "(preprocess=${preprocessTime}ms, inference=${inferenceTime}ms, " +
-                    "decode=${decodeTime}ms, embedding=${embeddingTime}ms)")
-            
-            // 7. Notify listener
-            if (text.isNotBlank()) {
+            try {
+                val (text, stats) = tokenizer.decodeWithStats(tokenIds)
+                val decodeTime = System.currentTimeMillis() - decodeStart
+                Log.d(TAG, "Decoding: \"$text\" in ${decodeTime}ms")
+                
+                // 5. Language detection
+                val language = stats.language
+                Log.d(TAG, "Language: $language")
+                
+                // 6. Generate embedding for recognized text
+                val embeddingStart = System.currentTimeMillis()
+                val embedding = if (text.isNotBlank()) {
+                    embeddingManager.encode(text.trim())
+                } else {
+                    FloatArray(384) { 0f }  // Zero embedding for empty text
+                }
+                val embeddingTime = System.currentTimeMillis() - embeddingStart
+                Log.d(TAG, "Embedding: ${embedding.size} dims in ${embeddingTime}ms")
+                
+                // Total processing time
+                val totalTime = System.currentTimeMillis() - pipelineStart
+                
+                // Update statistics
+                totalInferences++
+                totalInferenceTimeMs += totalTime
+                
+                Log.i(TAG, "Pipeline complete: ${totalTime}ms " +
+                        "(preprocess=${preprocessTime}ms, inference=${inferenceTime}ms, " +
+                        "decode=${decodeTime}ms, embedding=${embeddingTime}ms)")
+                
+                // 7. Notify listener
+                if (text.isNotBlank()) {
+                    listener?.onTranscription(
+                        text = text.trim(),
+                        embedding = embedding,
+                        language = language,
+                        startTime = startTime,
+                        endTime = endTime,
+                        processingTimeMs = totalTime
+                    )
+                } else {
+                    Log.d(TAG, "Empty transcription, skipping callback")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "DECODING FAILED!", e)
+                e.printStackTrace()
+                
+                // Fallback: return token IDs as string for debugging
+                val fallbackText = tokenIds.joinToString("")
+                Log.w(TAG, "Fallback: returning concatenated token IDs: $fallbackText")
+                
                 listener?.onTranscription(
-                    text = text.trim(),
-                    embedding = embedding,
-                    language = language,
+                    text = fallbackText,
+                    embedding = FloatArray(384) { 0f },
+                    language = "fr",  // Default
                     startTime = startTime,
                     endTime = endTime,
-                    processingTimeMs = totalTime
+                    processingTimeMs = System.currentTimeMillis() - pipelineStart
                 )
-            } else {
-                Log.d(TAG, "Empty transcription, skipping callback")
             }
             
             // 8. Clear buffer for next segment
