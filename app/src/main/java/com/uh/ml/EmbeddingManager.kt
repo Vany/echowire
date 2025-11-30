@@ -104,12 +104,27 @@ class EmbeddingManager(
     
     /**
      * Load vocabulary from tokenizer JSON file.
-     * Format: {"vocab": {"[PAD]": 0, "token": id, ...}}
+     * HuggingFace tokenizer format: {"model": {"vocab": {"token": id, ...}}}
+     * Or simplified format: {"vocab": {"token": id, ...}}
      */
     private fun loadVocabulary() {
         try {
             val vocabJson = JSONObject(vocabFile.readText())
-            val vocab = vocabJson.getJSONObject("vocab")
+            
+            // Try HuggingFace format first: {"model": {"vocab": {...}}}
+            val vocab = if (vocabJson.has("model")) {
+                val model = vocabJson.getJSONObject("model")
+                if (model.has("vocab")) {
+                    model.getJSONObject("vocab")
+                } else {
+                    throw IllegalStateException("No 'vocab' key in 'model' object")
+                }
+            } else if (vocabJson.has("vocab")) {
+                // Simplified format: {"vocab": {...}}
+                vocabJson.getJSONObject("vocab")
+            } else {
+                throw IllegalStateException("No 'vocab' key found in tokenizer file. Keys: ${vocabJson.keys().asSequence().toList()}")
+            }
             
             tokenToId = mutableMapOf<String, Long>().apply {
                 vocab.keys().forEach { token ->
