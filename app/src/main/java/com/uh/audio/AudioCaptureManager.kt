@@ -42,9 +42,15 @@ class AudioCaptureManager {
         private const val BUFFER_SIZE_BYTES = BUFFER_SIZE_SAMPLES * 2
         
         // Gain amplification: increase microphone sensitivity
-        // Default 3.0x gain to compensate for quiet microphone
+        // Default 6.0x gain to compensate for quiet microphone
         // Can be adjusted via setGain()
-        private const val DEFAULT_GAIN = 3.0f
+        private const val DEFAULT_GAIN = 6.0f
+        
+        // Audio source options (try different sources if one doesn't work well)
+        // MIC: Raw microphone, minimal processing (good balance)
+        // UNPROCESSED: No processing, loudest but noisy (requires Android 7.0+)
+        // VOICE_RECOGNITION: AGC enabled, may be quieter but cleaner
+        private const val DEFAULT_AUDIO_SOURCE = MediaRecorder.AudioSource.MIC
     }
     
     // Audio recording state
@@ -111,7 +117,7 @@ class AudioCaptureManager {
         val bufferSize = maxOf(minBufferSize, BUFFER_SIZE_BYTES * 4)
         
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            DEFAULT_AUDIO_SOURCE,  // Configurable audio source
             SAMPLE_RATE,
             CHANNEL_CONFIG,
             AUDIO_FORMAT,
@@ -122,7 +128,7 @@ class AudioCaptureManager {
             throw IllegalStateException("Failed to initialize AudioRecord")
         }
         
-        Log.i(TAG, "AudioRecord initialized: buffer=$bufferSize bytes, min=$minBufferSize bytes")
+        Log.i(TAG, "AudioRecord initialized: source=${getAudioSourceName(DEFAULT_AUDIO_SOURCE)}, buffer=$bufferSize bytes, min=$minBufferSize bytes, gain=${DEFAULT_GAIN}x")
         return bufferSize
     }
     
@@ -328,4 +334,17 @@ class AudioCaptureManager {
      * @return Current gain factor
      */
     fun getGain(): Float = gain
+    
+    /**
+     * Get human-readable name for audio source constant.
+     */
+    private fun getAudioSourceName(source: Int): String = when (source) {
+        MediaRecorder.AudioSource.MIC -> "MIC"
+        MediaRecorder.AudioSource.VOICE_RECOGNITION -> "VOICE_RECOGNITION"
+        MediaRecorder.AudioSource.CAMCORDER -> "CAMCORDER"
+        MediaRecorder.AudioSource.VOICE_COMMUNICATION -> "VOICE_COMMUNICATION"
+        MediaRecorder.AudioSource.UNPROCESSED -> "UNPROCESSED"
+        MediaRecorder.AudioSource.DEFAULT -> "DEFAULT"
+        else -> "UNKNOWN($source)"
+    }
 }
