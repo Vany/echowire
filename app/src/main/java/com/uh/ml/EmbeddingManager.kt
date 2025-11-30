@@ -165,9 +165,10 @@ class EmbeddingManager(
                 // 1. Tokenize text
                 val tokens = tokenize(text)
                 
-                // 2. Create input tensors (input_ids, attention_mask)
+                // 2. Create input tensors (input_ids, attention_mask, token_type_ids)
                 val inputIds = LongArray(MAX_SEQUENCE_LENGTH) { padTokenId }
                 val attentionMask = LongArray(MAX_SEQUENCE_LENGTH) { 0L }
+                val tokenTypeIds = LongArray(MAX_SEQUENCE_LENGTH) { 0L }  // All zeros for single sentence
                 
                 // Add [CLS] token at start
                 inputIds[0] = clsTokenId
@@ -201,10 +202,17 @@ class EmbeddingManager(
                     inputShape
                 )
                 
+                val tokenTypeIdsTensor = OnnxTensor.createTensor(
+                    env,
+                    LongBuffer.wrap(tokenTypeIds),
+                    inputShape
+                )
+                
                 // 4. Run inference
                 val inputs = mapOf(
                     "input_ids" to inputIdsTensor,
-                    "attention_mask" to attentionMaskTensor
+                    "attention_mask" to attentionMaskTensor,
+                    "token_type_ids" to tokenTypeIdsTensor
                 )
                 
                 val outputs = ortSession!!.run(inputs)
@@ -222,6 +230,7 @@ class EmbeddingManager(
                 // Cleanup
                 inputIdsTensor.close()
                 attentionMaskTensor.close()
+                tokenTypeIdsTensor.close()
                 outputs.close()
                 
                 val encodeTime = System.currentTimeMillis() - startTime
