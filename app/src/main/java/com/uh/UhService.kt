@@ -798,6 +798,7 @@ class UhService : Service() {
         processingTimeMs: Long
     ) {
         try {
+            // Android 12 JSONObject.put() only accepts Double/Int, not Float
             val message = JSONObject().apply {
                 put("type", "speech")
                 put("text", text)
@@ -808,7 +809,7 @@ class UhService : Service() {
                 put("segment_end", endTime)
                 put("processing_time_ms", processingTimeMs)
                 put("audio_duration_ms", endTime - startTime)
-                put("rtf", processingTimeMs.toFloat() / (endTime - startTime).toFloat())
+                put("rtf", (processingTimeMs.toDouble() / (endTime - startTime).toDouble()))
             }
             
             webSocketServer?.broadcastMessage(message.toString())
@@ -828,10 +829,11 @@ class UhService : Service() {
             // Only broadcast if WebSocket server is running
             val server = webSocketServer ?: return
             
+            // Android 12 JSONObject.put() only accepts Double/Int, not Float
             val message = JSONObject().apply {
                 put("type", "audio_status")
                 put("listening", isListening)
-                put("audio_level", audioLevel)
+                put("audio_level", audioLevel.toDouble())
                 put("timestamp", System.currentTimeMillis())
             }
             
