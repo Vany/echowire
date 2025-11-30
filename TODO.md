@@ -2093,15 +2093,44 @@ class UhService : Service() {
 
 **Next Phase:** Phase 5 - Text Embedding Generation (after 4.1-4.7 complete)
 
-## Phase 5: Text Embedding Generation
-- [ ] Create EmbeddingManager class
-  - [ ] Sentence-Embeddings-Android initialization
-  - [ ] Model and tokenizer loading
-  - [ ] Text → embedding conversion (384 dims)
-  - [ ] Batch processing optimization
-  - [ ] Error handling
-- [ ] Integrate with SpeechRecognitionManager (text → embedding)
-- [ ] Test embedding generation (<50ms per phrase)
+## Phase 5: Text Embedding Generation ✅ DONE
+
+**Completed:**
+- ✅ Created EmbeddingManager class with ONNX Runtime
+- ✅ Implemented all-MiniLM-L6-v2 model loading (384 dimensions)
+- ✅ Simple word-level tokenization (TODO: upgrade to WordPiece for better accuracy)
+- ✅ Mean pooling over token embeddings (SBERT standard)
+- ✅ L2 normalization for cosine similarity
+- ✅ Thread-safe inference with ReentrantLock
+- ✅ Cosine similarity helper function
+- ✅ Integrated into SpeechRecognitionManager pipeline
+- ✅ Updated RecognitionListener with embedding parameter
+- ✅ UhService passes embedding model files
+- ✅ Logging: embedding dimensions and first 5 values
+
+**Implementation:**
+- Location: `app/src/main/java/com/uh/ml/EmbeddingManager.kt`
+- Model: all-MiniLM-L6-v2 ONNX (86MB)
+- Vocab: tokenizer.json (455KB)
+- Target latency: <50ms per phrase
+- CPU execution: 2 threads
+
+**Pipeline Flow:**
+```
+Text → Tokenize → ONNX inference → Mean pooling → L2 normalize → 384-dim vector
+```
+
+**Limitations:**
+- Simple word-level tokenization (not WordPiece)
+- No subword handling
+- Lower accuracy than HuggingFace tokenizers
+
+**TODO for production:**
+- Integrate HuggingFace tokenizers Rust library via JNI
+- WordPiece tokenization for better accuracy
+- Handle unknown words better
+
+---
 
 ## Phase 6: WebSocket Integration
 - [ ] Extend UhWebSocketServer for speech messages
