@@ -33,7 +33,7 @@ class WhisperTokenizer(private val vocabFile: File) {
         const val TOKEN_START_OF_TRANSCRIPT = 50258
         const val TOKEN_END_OF_TEXT = 50257
         const val TOKEN_LANGUAGE_EN = 50259  // English
-        const val TOKEN_LANGUAGE_RU = 50304  // Russian
+        const val TOKEN_LANGUAGE_RU = 50263  // Russian (FIXED: was 50304 which is Azerbaijani)
         const val TOKEN_NO_TIMESTAMPS = 50363
         const val TOKEN_TRANSLATE = 50358
         const val TOKEN_TRANSCRIBE = 50359
@@ -51,22 +51,23 @@ class WhisperTokenizer(private val vocabFile: File) {
     private var tokenToText: Map<Int, String> = emptyMap()
     
     // Language code mapping (subset of most common)
+    // Full list: https://github.com/openai/whisper/blob/main/whisper/tokenizer.py
     private val languageTokens = mapOf(
-        TOKEN_LANGUAGE_EN to "en",
-        TOKEN_LANGUAGE_RU to "ru",
+        TOKEN_LANGUAGE_EN to "en",  // 50259
+        TOKEN_LANGUAGE_RU to "ru",  // 50263 (FIXED)
         50260 to "zh",  // Chinese
         50261 to "de",  // German
         50262 to "es",  // Spanish
-        50263 to "fr",  // French
-        50264 to "ja",  // Japanese
-        50265 to "pt",  // Portuguese
-        50266 to "it",  // Italian
-        50267 to "ko",  // Korean
-        50268 to "nl",  // Dutch
+        50263 to "ru",  // Russian (duplicate for safety)
+        50264 to "ko",  // Korean
+        50265 to "fr",  // French
+        50266 to "ja",  // Japanese
+        50267 to "pt",  // Portuguese
+        50268 to "tr",  // Turkish
         50269 to "pl",  // Polish
-        50270 to "tr",  // Turkish
-        50271 to "ar",  // Arabic
-        50272 to "sv",  // Swedish
+        50270 to "it",  // Italian
+        50271 to "nl",  // Dutch
+        50272 to "ar",  // Arabic
     )
     
     @Volatile
