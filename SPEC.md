@@ -26,13 +26,13 @@ Rust command-line client for discovering and connecting to UH services, receivin
 ### Speech Recognition
 - **Engine**: TensorFlow Lite with Whisper tiny multilingual model
 - **Hardware Acceleration**: 
-  - XNNPack for ARM NEON CPU optimization (2-3x speedup)
-  - GPU Delegate DISABLED (TFLite 2.16.1 library bug, classpath issues)
+  - GPU Delegate (Mali-G77) - TFLite 2.17.0 testing with CompatibilityList
+  - XNNPack for ARM NEON CPU optimization (fallback, 2-3x speedup)
   - NNAPI delegate NOT USED (Samsung NPU unreliable on Exynos 990)
 - **Model**: Tiny multilingual (66MB) - bundled in APK
 - **Mode**: Continuous listening with energy-based Voice Activity Detection (VAD)
-- **Latency Measured**: 400-600ms end-to-end (audio capture → broadcast)
-- **Real-time Factor**: 0.4-0.6x with XNNPack CPU (acceptable for speech)
+- **Latency Target**: 200-300ms with GPU, 400-600ms with CPU fallback
+- **Real-time Factor Target**: 0.2-0.3x with GPU, 0.4-0.6x with CPU
 - **Languages**: Multilingual (99 languages including English, Russian) with automatic detection
 - **Audio**: 16kHz mono, continuous capture while service running
 - **Preprocessing**: PCM audio → mel spectrogram (80 bins, 25ms window, 10ms hop)
@@ -190,14 +190,14 @@ uhcli get listening
 - Wake lock keeps screen on while service running (line power assumption)
 
 ## Performance Targets (Samsung Note20, Exynos 990, Mali-G77, 8GB RAM)
-- **Latency Measured**: 400-600ms end-to-end (audio capture → WebSocket broadcast)
-- **Real-time Factor Measured**: 0.4-0.6x with XNNPack CPU (acceptable for speech)
+- **Latency Target**: 200-300ms with GPU, 400-600ms with CPU fallback
+- **Real-time Factor Target**: 0.2-0.3x with GPU, 0.4-0.6x with CPU
 - **Throughput**: Support 3+ simultaneous WebSocket clients without degradation
 - **Memory**: <2GB total (models + runtime + buffers)
 - **Model Loading**: 2-5 seconds initial load (extraction + TFLite initialization)
 - **Audio Capture**: 16kHz mono, 100ms buffering (1600 samples)
 - **CPU Acceleration**: XNNPack ARM NEON optimizations (2-3x speedup)
-- **GPU Status**: DISABLED (TFLite 2.16.1 library bug prevents GPU delegate usage)
+- **GPU Status**: TESTING with TFLite 2.17.0 (CompatibilityList + graceful fallback)
 - **NPU Status**: NOT USED (Samsung NPU unreliable via NNAPI)
 
 ## Security Considerations

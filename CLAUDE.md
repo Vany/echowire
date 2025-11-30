@@ -42,17 +42,41 @@ Microphone → AudioCaptureManager (16kHz PCM ShortArray)
 
 ## Critical Implementation Details
 
-### TFLite GPU Delegate Bug
-**Problem**: TensorFlow Lite 2.14.0, 2.16.1 have broken GPU delegate
-- `GpuDelegate()` fails with `NoClassDefFoundError: GpuDelegateFactory$Options`
-- Factory classes exist in source but NOT in published Maven artifacts
-- Affects all TFLite 2.x versions tested
+### TFLite GPU Delegate - Testing with 2.17.0
+**Update**: Upgraded from 2.16.1 to 2.17.0 to test GPU delegate fixes
 
-**Solution**: DISABLED GPU delegate, using XNNPack CPU-only
-- Still meets performance targets: 400-600ms latency, RTF 0.4-0.6x
-- XNNPack provides 2-3x ARM NEON speedup over naive CPU
+**Previous Issue (2.16.1)**: 
+- `GpuDelegate()` failed with `NoClassDefFoundError: GpuDelegateFactory$Options`
+- Factory classes existed in source but NOT in published Maven artifacts
+- Affected all TFLite 2.x versions tested
 
-**Code Location**: `WhisperModel.kt:66-80`
+**Current Status (2.17.0)**: TESTING
+- Using `CompatibilityList` for safe device compatibility check
+- `CompatibilityList.bestOptionsForThisDevice` provides optimal GPU config
+- Graceful fallback to XNNPack CPU if GPU fails
+- Expected performance if GPU works: 200-300ms, RTF 0.2-0.3x (2-3x speedup)
+- Fallback performance: 400-600ms, RTF 0.4-0.6x (still meets targets)
+
+**Implementation**: `WhisperModel.kt:128-166`
+```kotlin
+val compatList = CompatibilityList()
+if (compatList.isDelegateSupportedOnThisDevice) {
+    val delegateOptions = compatList.bestOptionsForThisDevice
+    val gpuDelegate = GpuDelegate(delegateOptions)
+    options.addDelegate(gpuDelegate)
+    // Log: "GPU delegate enabled (Mali-G77 via TFLite 2.17.0)"
+} else {
+    // Log: "GPU delegate not compatible with this device"
+    // Fallback to XNNPack
+}
+```
+
+**Testing Required**:
+- [ ] Device test on Samsung Note20 (Mali-G77)
+- [ ] Check logs for "GPU delegate enabled" vs "Falling back to XNNPack"
+- [ ] Measure actual inference time
+- [ ] Verify no crashes or ClassNotFound errors
+- [ ] Compare GPU vs CPU performance (should be 2-3x faster)
 
 ### Whisper Vocabulary Loading Bug (FIXED)
 **Problem**: Original code used `.forEach{}` to iterate vocabulary JSON
@@ -197,11 +221,12 @@ App + UI:          ~500MB
 - Better multilingual support
 
 ### GPU Acceleration
-**Current**: Disabled due to TFLite library bug
-**Future**: Wait for TFLite 2.17+ with fixed GPU delegate
-- Expected 2-3x speedup over XNNPack CPU
-- Would reduce RTF to 0.2-0.3x
-- Monitor TensorFlow Lite releases
+**Current**: Testing with TFLite 2.17.0 + CompatibilityList
+**Status**: Awaiting device testing on Samsung Note20 (Mali-G77)
+- If successful: 2-3x speedup over XNNPack CPU (200-300ms, RTF 0.2-0.3x)
+- If fails: Graceful fallback to XNNPack CPU (400-600ms, RTF 0.4-0.6x)
+- CompatibilityList ensures safe GPU config for device
+- Monitor logs for "GPU delegate enabled" vs "Falling back to XNNPack"
 
 ### Model Selection
 **Current**: Only tiny model (66MB) bundled
