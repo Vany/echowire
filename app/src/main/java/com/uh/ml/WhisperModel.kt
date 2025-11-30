@@ -204,17 +204,42 @@ class WhisperModel(
             // Prepare input tensor [1, 80, 3000]
             val inputTensor = prepareInputTensor(melSpectrogram)
             
-            // Allocate output tensor [1, 448]
-            val outputTensor = Array(1) { IntArray(MAX_TOKEN_SEQUENCE) }
+            // CRITICAL: Check if output is logits or token IDs
+            // Try reading as float first (logits)
+            val outputTensorFloat = Array(1) { Array(MAX_TOKEN_SEQUENCE) { FloatArray(VOCAB_SIZE) } }
             
-            // Run inference
-            interpreter!!.run(inputTensor, outputTensor)
-            
-            val inferenceTime = System.currentTimeMillis() - startTime
-            Log.d(TAG, "Inference completed in ${inferenceTime}ms")
-            
-            // Extract token IDs (remove batch dimension)
-            outputTensor[0]
+            try {
+                // Try inference with float output (logits)
+                interpreter!!.run(inputTensor, outputTensorFloat)
+                
+                // Apply argmax to get token IDs
+                val tokenIds = IntArray(MAX_TOKEN_SEQUENCE) { seqIdx ->
+                    outputTensorFloat[0][seqIdx].indices.maxByOrNull { 
+                        outputTensorFloat[0][seqIdx][it] 
+                    } ?: 0
+                }
+                
+                val inferenceTime = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Inference completed in ${inferenceTime}ms (logits → argmax)")
+                Log.d(TAG, "First 10 tokens: ${tokenIds.take(10).joinToString()}")
+                Log.d(TAG, "Max logit values: ${tokenIds.take(5).map { 
+                    outputTensorFloat[0][0][it] 
+                }.joinToString()}")
+                
+                return@withLock tokenIds
+                
+            } catch (e: Exception) {
+                // Fallback: try reading as int (token IDs directly)
+                Log.w(TAG, "Float output failed, trying int output: ${e.message}")
+                val outputTensorInt = Array(1) { IntArray(MAX_TOKEN_SEQUENCE) }
+                interpreter!!.run(inputTensor, outputTensorInt)
+                
+                val inferenceTime = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Inference completed in ${inferenceTime}ms (direct token IDs)")
+                Log.d(TAG, "First 10 tokens: ${outputTensorInt[0].take(10).joinToString()}")
+                
+                return@withLock outputTensorInt[0]
+            }
         }
     }
     

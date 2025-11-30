@@ -57,6 +57,19 @@ class AudioPreprocessor {
         // 1. Normalize PCM to float [-1.0, 1.0]
         val normalizedSamples = pcmSamples.map { it / 32768.0 }.toDoubleArray()
         
+        // DEBUG: Check if we have actual audio data
+        val maxSample = normalizedSamples.maxOrNull() ?: 0.0
+        val minSample = normalizedSamples.minOrNull() ?: 0.0
+        val avgAbsSample = normalizedSamples.map { abs(it) }.average()
+        Log.d(TAG, "PCM stats: samples=${pcmSamples.size}, " +
+                "range=[${minSample}, ${maxSample}], " +
+                "avgAbs=${avgAbsSample}")
+        
+        if (avgAbsSample < 0.001) {
+            Log.w(TAG, "WARNING: Audio is very quiet (avgAbs=${avgAbsSample}), " +
+                    "might be silence or mic issue!")
+        }
+        
         // 2. Compute STFT (Short-Time Fourier Transform)
         val stft = computeSTFT(normalizedSamples)
         
