@@ -1660,3 +1660,170 @@ Verified fix resolves crash on Samsung Note20 (Android 12, Exynos 990).
 
 **Date Discovered:** 2024-11-30  
 **Git Commit:** 95b6fe4
+
+## CRITICAL BUG FIX: Whisper Vocabulary and Language Detection (2024-11-30)
+
+### Symptoms
+- Speech recognition always detected "fr" (French) language regardless of input
+- Always recognized "33202" as transcribed text regardless of spoken words
+- Russian language (ru) was not being detected correctly
+
+### Root Cause Analysis
+
+#### 1. Wrong Vocabulary File
+The `whisper_vocab.json` file was a **GPT-2 vocabulary** (50258 tokens) instead of **Whisper multilingual vocabulary** (51865 tokens):
+- Missing all language code tokens (50259-50357) for 99 languages
+- Missing all timestamp tokens (50364-51864) for 0.0s-30.0s alignment
+- Token 33202 mapped to "0000" in the incomplete vocabulary (explains number outputs)
+- Only had base BPE tokens, no Whisper-specific special tokens
+
+#### 2. Incorrect Language Token Constants
+In `WhisperTokenizer.kt`, the Russian language constant was wrong:
+```kotlin
+// WRONG (before fix):
+const val TOKEN_LANGUAGE_RU = 50304  // Actually Azerbaijani <|az|>
+
+// CORRECT (after fix):
+const val TOKEN_LANGUAGE_RU = 50263  // Russian <|ru|>
+```
+
+This caused:
+- Russian speech to be labeled as Azerbaijani
+- Token 50304 (`<|az|>`) to be misinterpreted as Russian
+- Language detection to fail completely
+
+#### 3. Incorrect Language Mapping Table
+The `languageTokens` map had wrong language codes:
+- 50263 was mapped to "fr" (French) - WRONG, should be "ru" (Russian)
+- 50304 was implied as "ru" via constant - WRONG, should be "az" (Azerbaijani)
+- Other language codes were shifted incorrectly
+
+### Solution
+
+#### 1. Downloaded Correct Vocabulary
+```bash
+# Download HuggingFace Whisper tokenizer
+curl -L -o whisper_tokenizer_hf.json \
+  "https://huggingface.co/openai/whisper-tiny/raw/main/tokenizer.json"
+```
+
+#### 2. Created Extraction Script
+`scripts/extract_whisper_vocab.py`:
+- Extracts base vocabulary (50258 tokens)
+- Adds all special tokens from `added_tokens` field (1607 tokens)
+- Inverts format from token→id to id→token
+- Verifies critical tokens
+- Total: 51865 tokens
+
+#### 3. Replaced Vocabulary File
+```bash
+python3 scripts/extract_whisper_vocab.py \
+  app/src/main/assets/models/whisper_tokenizer_hf.json \
+  app/src/main/assets/models/whisper_vocab.json
+```
+
+Result:
+- Old vocab: 816KB (50258 tokens, GPT-2)
+- New vocab: 1.1MB (51865 tokens, Whisper multilingual)
+
+#### 4. Fixed Language Token Constants
+```kotlin
+// WhisperTokenizer.kt
+const val TOKEN_LANGUAGE_EN = 50259  // English
+const val TOKEN_LANGUAGE_RU = 50263  // Russian (FIXED: was 50304)
+```
+
+#### 5. Corrected Language Mapping Table
+```kotlin
+private val languageTokens = mapOf(
+    50259 to "en",  // English
+    50260 to "zh",  // Chinese
+    50261 to "de",  // German
+    50262 to "es",  // Spanish
+    50263 to "ru",  // Russian (FIXED)
+    50264 to "ko",  // Korean
+    50265 to "fr",  // French (FIXED)
+    50266 to "ja",  // Japanese
+    50267 to "pt",  // Portuguese
+    // ... etc
+)
+```
+
+### Verified Correct Mappings
+
+| Token ID | Symbol | Language | Notes |
+|----------|--------|----------|-------|
+| 50257 | `<\|endoftext\|>` | - | End of transcription |
+| 50258 | `<\|startoftranscript\|>` | - | Start marker |
+| 50259 | `<\|en\|>` | English | ✓ Correct |
+| 50260 | `<\|zh\|>` | Chinese | ✓ Correct |
+| 50261 | `<\|de\|>` | German | ✓ Correct |
+| 50262 | `<\|es\|>` | Spanish | ✓ Correct |
+| 50263 | `<\|ru\|>` | **Russian** | ✓ **FIXED** (was 50304) |
+| 50264 | `<\|ko\|>` | Korean | ✓ Correct |
+| 50265 | `<\|fr\|>` | French | ✓ Correct (was wrongly at 50263) |
+| 50304 | `<\|az\|>` | Azerbaijani | ✗ Was wrongly labeled as Russian |
+| 50363 | `<\|notimestamps\|>` | - | No timestamp mode |
+| 33202 | "0000" | - | Regular token (explains "33202" outputs) |
+
+### Scripts Created
+
+1. **`scripts/extract_whisper_vocab.py`**
+   - Extracts full Whisper vocabulary from HuggingFace tokenizer.json
+   - Combines base vocab + added_tokens
+   - Inverts to id→token format
+   - Verifies critical language tokens
+   - Usage: `python3 extract_whisper_vocab.py <tokenizer.json> <output_vocab.json>`
+
+2. **`scripts/invert_vocab.py`**
+   - Helper to invert any vocabulary from token→id to id→token
+   - Usage: `python3 invert_vocab.py <input.json> <output.json>`
+
+### Testing Required
+
+After this fix, you must:
+
+1. **Rebuild the app** (vocabulary file changed):
+   ```bash
+   make clean
+   make build
+   make install
+   ```
+
+2. **Test English speech**:
+   - Should now detect language as "en"
+   - Should transcribe correctly without "33202"
+
+3. **Test Russian speech**:
+   - Should now detect language as "ru" (not "fr" or "az")
+   - Should transcribe Russian text correctly
+
+4. **Verify language detection**:
+   - Check logs for: `Detected language: ru` or `Detected language: en`
+   - Should match the actual spoken language
+
+### Impact
+
+- **Before**: Broken language detection, random "33202" outputs, "fr" always detected
+- **After**: Correct 99-language detection, proper Russian/English/French identification
+- **Performance**: No change (same vocabulary size expected by model)
+- **APK size**: +300KB (vocabulary file grew from 816KB to 1.1MB)
+
+### Git Commit
+
+```
+commit 83b02e0
+CRITICAL FIX: Correct Whisper vocabulary and language token mappings
+
+Root cause of "fr" and "33202" recognition issue:
+- Wrong vocabulary: GPT-2 (50258) instead of Whisper (51865)
+- Wrong TOKEN_LANGUAGE_RU: 50304 (Azerbaijani) → 50263 (Russian)
+- Created extraction scripts for reproducible vocab generation
+```
+
+### References
+
+- Whisper tokenizer: https://huggingface.co/openai/whisper-tiny/blob/main/tokenizer.json
+- Language tokens: https://github.com/openai/whisper/blob/main/whisper/tokenizer.py
+- Whisper vocabulary size: 51865 tokens (multilingual)
+- GPT-2 vocabulary size: 50257 tokens (English-only)
