@@ -1056,11 +1056,18 @@ Service Stop
 **Conservative Strategy:** Current TFLite solution works, don't fix what isn't broken  
 **Aggressive Strategy:** Try Arm NN this weekend for 2-3x performance gain
 
+**DECISION:** Going with MNN (user choice)
+- Smallest binary (+400KB vs +5MB)
+- Future-proof (LLM support)
+- Best Mali-G77 optimization
+- See `/MNN_MIGRATION_PLAN.md` for detailed implementation plan
+
 #### Links:
 - Arm NN: https://github.com/ARM-software/armnn
-- MNN: https://github.com/alibaba/MNN
+- MNN: https://github.com/alibaba/MNN (CHOSEN)
 - NCNN: https://github.com/Tencent/ncnn
 - Full Research: `/RESEARCH_ML_FRAMEWORKS.md`
+- Implementation: `/MNN_MIGRATION_PLAN.md`
 
 ---
 
