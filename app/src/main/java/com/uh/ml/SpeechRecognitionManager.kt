@@ -9,14 +9,16 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * High-level manager for continuous speech recognition
- * Orchestrates audio buffering, preprocessing, inference, and decoding
+ * High-level manager for continuous speech recognition with embeddings
+ * Orchestrates audio buffering, preprocessing, inference, decoding, and embedding generation
  * Thread-safe, handles lifecycle and error recovery
  */
 class SpeechRecognitionManager(
     private val context: Context,
     private val modelFile: File,
-    private val vocabFile: File
+    private val vocabFile: File,
+    private val embeddingModelFile: File,
+    private val embeddingVocabFile: File
 ) {
     
     companion object {
@@ -35,6 +37,7 @@ class SpeechRecognitionManager(
     private val audioPreprocessor = AudioPreprocessor()
     private lateinit var whisperModel: WhisperModel
     private lateinit var tokenizer: WhisperTokenizer
+    private lateinit var embeddingManager: EmbeddingManager
     
     // Audio buffering
     private val audioBuffer = CircularAudioBuffer(
@@ -63,9 +66,10 @@ class SpeechRecognitionManager(
      */
     interface RecognitionListener {
         /**
-         * Called when transcription is complete
+         * Called when transcription is complete with embedding
          * 
          * @param text Recognized text
+         * @param embedding 384-dimensional semantic embedding (L2 normalized)
          * @param language Detected language code (e.g., "en", "ru")
          * @param startTime Audio start timestamp (milliseconds)
          * @param endTime Audio end timestamp (milliseconds)
@@ -73,6 +77,7 @@ class SpeechRecognitionManager(
          */
         fun onTranscription(
             text: String,
+            embedding: FloatArray,
             language: String?,
             startTime: Long,
             endTime: Long,
@@ -114,6 +119,10 @@ class SpeechRecognitionManager(
             
             // Load tokenizer
             tokenizer = WhisperTokenizer(vocabFile)
+            
+            // Load embedding model
+            embeddingManager = EmbeddingManager(context, embeddingModelFile, embeddingVocabFile)
+            embeddingManager.load()
             
             isInitialized.set(true)
             
@@ -237,6 +246,16 @@ class SpeechRecognitionManager(
             val language = stats.language
             Log.d(TAG, "Language: $language")
             
+            // 6. Generate embedding for recognized text
+            val embeddingStart = System.currentTimeMillis()
+            val embedding = if (text.isNotBlank()) {
+                embeddingManager.encode(text.trim())
+            } else {
+                FloatArray(384) { 0f }  // Zero embedding for empty text
+            }
+            val embeddingTime = System.currentTimeMillis() - embeddingStart
+            Log.d(TAG, "Embedding: ${embedding.size} dims in ${embeddingTime}ms")
+            
             // Total processing time
             val totalTime = System.currentTimeMillis() - pipelineStart
             
@@ -245,12 +264,14 @@ class SpeechRecognitionManager(
             totalInferenceTimeMs += totalTime
             
             Log.i(TAG, "Pipeline complete: ${totalTime}ms " +
-                    "(preprocess=${preprocessTime}ms, inference=${inferenceTime}ms, decode=${decodeTime}ms)")
+                    "(preprocess=${preprocessTime}ms, inference=${inferenceTime}ms, " +
+                    "decode=${decodeTime}ms, embedding=${embeddingTime}ms)")
             
-            // 6. Notify listener
+            // 7. Notify listener
             if (text.isNotBlank()) {
                 listener?.onTranscription(
                     text = text.trim(),
+                    embedding = embedding,
                     language = language,
                     startTime = startTime,
                     endTime = endTime,
@@ -260,7 +281,7 @@ class SpeechRecognitionManager(
                 Log.d(TAG, "Empty transcription, skipping callback")
             }
             
-            // 7. Clear buffer for next segment
+            // 8. Clear buffer for next segment
             audioBuffer.clear()
             
         } catch (e: Exception) {
@@ -321,6 +342,7 @@ class SpeechRecognitionManager(
         // Close models
         if (isInitialized.get()) {
             whisperModel.close()
+            embeddingManager.close()
         }
         
         // Clear buffer

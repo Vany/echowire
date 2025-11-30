@@ -214,10 +214,14 @@ class UhService : Service() {
                 // Get model file paths from ModelManager
                 val whisperModelFile = modelManager.whisperModelFile
                 val vocabFile = modelManager.whisperVocabFile
+                val embeddingModelFile = modelManager.embeddingModelFile
+                val embeddingVocabFile = modelManager.tokenizerFile
                 
                 Log.i(TAG, "Checking model files...")
                 Log.i(TAG, "  Whisper model: ${whisperModelFile.absolutePath} (exists: ${whisperModelFile.exists()}, size: ${whisperModelFile.length()} bytes)")
                 Log.i(TAG, "  Vocab file: ${vocabFile.absolutePath} (exists: ${vocabFile.exists()}, size: ${vocabFile.length()} bytes)")
+                Log.i(TAG, "  Embedding model: ${embeddingModelFile.absolutePath} (exists: ${embeddingModelFile.exists()}, size: ${embeddingModelFile.length()} bytes)")
+                Log.i(TAG, "  Tokenizer file: ${embeddingVocabFile.absolutePath} (exists: ${embeddingVocabFile.exists()}, size: ${embeddingVocabFile.length()} bytes)")
                 
                 if (!whisperModelFile.exists()) {
                     throw IllegalStateException("Whisper model not found: ${whisperModelFile.absolutePath}")
@@ -225,13 +229,21 @@ class UhService : Service() {
                 if (!vocabFile.exists()) {
                     throw IllegalStateException("Whisper vocab not found: ${vocabFile.absolutePath}")
                 }
+                if (!embeddingModelFile.exists()) {
+                    throw IllegalStateException("Embedding model not found: ${embeddingModelFile.absolutePath}")
+                }
+                if (!embeddingVocabFile.exists()) {
+                    throw IllegalStateException("Tokenizer not found: ${embeddingVocabFile.absolutePath}")
+                }
                 
                 Log.i(TAG, "Creating SpeechRecognitionManager...")
-                // Initialize SpeechRecognitionManager
+                // Initialize SpeechRecognitionManager with all models
                 speechRecognitionManager = SpeechRecognitionManager(
                     context = this@UhService,
                     modelFile = whisperModelFile,
-                    vocabFile = vocabFile
+                    vocabFile = vocabFile,
+                    embeddingModelFile = embeddingModelFile,
+                    embeddingVocabFile = embeddingVocabFile
                 )
                 
                 Log.i(TAG, "Initializing models (this may take several seconds)...")
@@ -243,12 +255,13 @@ class UhService : Service() {
                 speechRecognitionManager?.setListener(object : SpeechRecognitionManager.RecognitionListener {
                     override fun onTranscription(
                         text: String,
+                        embedding: FloatArray,
                         language: String?,
                         startTime: Long,
                         endTime: Long,
                         processingTimeMs: Long
                     ) {
-                        handleTranscription(text, language, startTime, endTime, processingTimeMs)
+                        handleTranscription(text, embedding, language, startTime, endTime, processingTimeMs)
                     }
                     
                     override fun onProcessingStarted() {
@@ -734,7 +747,9 @@ class UhService : Service() {
      * @param processingTimeMs Time taken to process
      */
     private fun handleTranscription(
+    private fun handleTranscription(
         text: String,
+        embedding: FloatArray,
         language: String?,
         startTime: Long,
         endTime: Long,
@@ -747,12 +762,10 @@ class UhService : Service() {
         Log.i(TAG, "  Language: $language")
         Log.i(TAG, "  Audio duration: ${audioDurationMs}ms")
         Log.i(TAG, "  Processing time: ${processingTimeMs}ms (RTF: ${"%.2f".format(rtf)})")
+        Log.i(TAG, "  Embedding: ${embedding.size} dimensions (first 5: [${embedding.take(5).joinToString(", ") { "%.4f".format(it) }}])")
         
         // Notify listener for UI update
         listener?.onTranscriptionReceived(text, language, processingTimeMs)
-        
-        // TODO Phase 5: Generate embedding from text
-        // val embedding = embeddingManager.generateEmbedding(text)
         
         // TODO Phase 6: Broadcast via WebSocket
         // broadcastSpeechMessage(text, language, embedding, startTime, endTime)
