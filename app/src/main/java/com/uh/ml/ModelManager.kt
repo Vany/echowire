@@ -114,9 +114,19 @@ class ModelManager private constructor(private val context: Context) {
                 Log.d(TAG, "Whisper model already exists: ${whisperModelFile.length()} bytes")
             }
             
-            // Extract Whisper vocabulary if not exists
-            if (!whisperVocabFile.exists()) {
-                Log.i(TAG, "Extracting Whisper vocabulary from assets...")
+            // Extract Whisper vocabulary if not exists or wrong size
+            // Expected size: ~1.1MB for correct format, ~800KB for old inverted format
+            val expectedVocabMinSize = 1000000L  // 1MB minimum
+            val needsVocabExtraction = !whisperVocabFile.exists() || 
+                                       whisperVocabFile.length() < expectedVocabMinSize
+            
+            if (needsVocabExtraction) {
+                if (whisperVocabFile.exists()) {
+                    Log.w(TAG, "Whisper vocabulary wrong size (${whisperVocabFile.length()} bytes), re-extracting...")
+                    whisperVocabFile.delete()
+                } else {
+                    Log.i(TAG, "Extracting Whisper vocabulary from assets...")
+                }
                 extractModelFromAssets(
                     assetPath = WHISPER_VOCAB_ASSET_PATH,
                     destination = whisperVocabFile,
