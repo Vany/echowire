@@ -1,4 +1,4 @@
-package com.uh
+package com.uh.ui
 
 import android.Manifest
 import android.content.ComponentName
@@ -11,7 +11,10 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.ActivityCompat.OnRequestPermissionsResultCallback
 import androidx.core.content.ContextCompat
+import com.uh.R
+import com.uh.service.UhService
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -33,8 +36,8 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private lateinit var logTextView: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
-    private lateinit var waveformView: com.uh.ui.WaveformView
-    private lateinit var dbMeterView: com.uh.ui.DbMeterView
+    private lateinit var waveformView: WaveformView
+    private lateinit var dbMeterView: DbMeterView
 
     private var uhService: UhService? = null
     private var serviceBound: Boolean = false

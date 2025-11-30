@@ -1,4 +1,4 @@
-package com.uh
+package com.uh.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -8,19 +8,22 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.net.nsd.NsdManager
-import android.net.nsd.NsdServiceInfo
-import android.net.wifi.WifiManager
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.uh.R
 import com.uh.audio.AudioCaptureManager
 import com.uh.audio.SimpleVAD
+import com.uh.config.RuntimeConfig
+import com.uh.config.UhConfig
 import com.uh.ml.ModelManager
 import com.uh.ml.SpeechRecognitionManager
+import com.uh.network.MdnsAdvertiser
+import com.uh.network.UhWebSocketServer
+import com.uh.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -34,7 +37,6 @@ import java.net.ServerSocket
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import kotlin.random.Random
 
 /**
  * Foreground service that runs WebSocket server and advertises via mDNS.
@@ -102,6 +104,11 @@ class UhService : Service() {
     @Volatile
     private var isListening: Boolean = false
     
+    // Audio level throttling (prevent flooding UI thread)
+    // Audio callbacks run at ~100 Hz, throttle to 20 Hz max
+    private var lastAudioLevelUpdate: Long = 0
+    private val audioLevelThrottleMs: Long = 50  // 1000ms / 20 = 50ms minimum interval
+    
     // Speech recognition
     private var speechRecognitionManager: SpeechRecognitionManager? = null
 
@@ -109,10 +116,8 @@ class UhService : Service() {
     private var webSocketServer: UhWebSocketServer? = null
     private var serverPort: Int = 0
 
-    // mDNS registration
-    private var nsdManager: NsdManager? = null
-    private var registrationListener: NsdManager.RegistrationListener? = null
-    private var multicastLock: WifiManager.MulticastLock? = null
+    // mDNS advertiser
+    private var mdnsAdvertiser: MdnsAdvertiser? = null
 
     // Wake lock for screen control
     private var wakeLock: PowerManager.WakeLock? = null
@@ -477,105 +482,34 @@ class UhService : Service() {
         }
     }
 
+    /**
+     * Register mDNS service for network discovery.
+     * Creates MdnsAdvertiser instance and registers with current server port.
+     */
     private fun registerMdnsService() {
         try {
-            // Check if WiFi is connected
-            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-            if (!wifiManager.isWifiEnabled) {
-                Log.w(TAG, "WiFi is not enabled, mDNS registration may fail")
-            }
-            
-            // Acquire multicast lock (required for mDNS on WiFi)
-            val lock = wifiManager.createMulticastLock("UhService_mDNS").apply {
-                setReferenceCounted(true)
-                acquire()
-            }
-            multicastLock = lock
-            Log.d(TAG, "Multicast lock acquired")
-            
-            try {
-                nsdManager = getSystemService(NsdManager::class.java)
-                
-                val serviceInfo = NsdServiceInfo().apply {
-                    serviceName = config.mdnsServiceName
-                    serviceType = config.mdnsServiceType
-                    port = serverPort
+            mdnsAdvertiser = MdnsAdvertiser(
+                context = this,
+                serviceType = config.mdnsServiceType,
+                serviceName = config.mdnsServiceName,
+                onError = { errorMsg ->
+                    listener?.onError(errorMsg, null)
                 }
-                
-                Log.d(TAG, "Attempting mDNS registration: name=${serviceInfo.serviceName}, type=${serviceInfo.serviceType}, port=${serviceInfo.port}")
-
-                registrationListener = object : NsdManager.RegistrationListener {
-                    override fun onRegistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                        val errorMsg = when (errorCode) {
-                            NsdManager.FAILURE_ALREADY_ACTIVE -> "Service already registered"
-                            NsdManager.FAILURE_INTERNAL_ERROR -> "Internal error"
-                            NsdManager.FAILURE_MAX_LIMIT -> "Max registrations reached"
-                            else -> "Unknown error code: $errorCode"
-                        }
-                        Log.e(TAG, "mDNS registration failed: $errorMsg")
-                        listener?.onError("mDNS registration failed: $errorMsg", null)
-                    }
-
-                    override fun onUnregistrationFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
-                        Log.e(TAG, "mDNS unregistration failed: $errorCode")
-                    }
-
-                    override fun onServiceRegistered(serviceInfo: NsdServiceInfo) {
-                        Log.i(TAG, "mDNS service registered: ${serviceInfo.serviceName}")
-                    }
-
-                    override fun onServiceUnregistered(serviceInfo: NsdServiceInfo) {
-                        Log.i(TAG, "mDNS service unregistered: ${serviceInfo.serviceName}")
-                    }
-                }
-
-                nsdManager?.registerService(
-                    serviceInfo,
-                    NsdManager.PROTOCOL_DNS_SD,
-                    registrationListener
-                )
-            } catch (e: Exception) {
-                // CRITICAL: Release multicast lock on registration failure to prevent leak
-                Log.e(TAG, "Failed to register mDNS service", e)
-                listener?.onError("mDNS registration error: ${e.message}", e)
-                
-                // Clean up multicast lock
-                try {
-                    if (lock.isHeld) {
-                        lock.release()
-                        Log.d(TAG, "Multicast lock released after mDNS failure")
-                    }
-                } catch (releaseError: Exception) {
-                    Log.e(TAG, "Failed to release multicast lock after error", releaseError)
-                }
-                multicastLock = null
-                throw e  // Re-throw to propagate failure
-            }
-
+            )
+            mdnsAdvertiser?.register(serverPort)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to setup mDNS", e)
-            // Error already logged and multicast lock cleaned up above
+            Log.e(TAG, "Failed to create mDNS advertiser", e)
+            listener?.onError("mDNS setup error: ${e.message}", e)
         }
     }
 
+    /**
+     * Unregister mDNS service and clean up.
+     */
     private fun unregisterMdnsService() {
         try {
-            registrationListener?.let { listener ->
-                nsdManager?.unregisterService(listener)
-            }
-            registrationListener = null
-            nsdManager = null
-            
-            // Release multicast lock
-            multicastLock?.let { lock ->
-                if (lock.isHeld) {
-                    lock.release()
-                    Log.d(TAG, "Multicast lock released")
-                }
-            }
-            multicastLock = null
-            
-            Log.i(TAG, "mDNS service unregistered")
+            mdnsAdvertiser?.unregister()
+            mdnsAdvertiser = null
         } catch (e: Exception) {
             Log.e(TAG, "Error unregistering mDNS service", e)
         }
@@ -717,9 +651,15 @@ class UhService : Service() {
                 }
                 
                 override fun onAudioLevel(level: Float) {
-                    listener?.onAudioLevelChanged(level)
-                    // Audio status no longer broadcast continuously
-                    // Only speech recognition results are sent via WebSocket
+                    // Throttle audio level updates to max 20 Hz (every 50ms)
+                    // Prevents flooding UI thread with 100 updates/second
+                    val now = System.currentTimeMillis()
+                    if (now - lastAudioLevelUpdate >= audioLevelThrottleMs) {
+                        listener?.onAudioLevelChanged(level)
+                        lastAudioLevelUpdate = now
+                    }
+                    // Audio status no longer broadcast continuously via WebSocket
+                    // Only speech recognition results are sent
                 }
                 
                 override fun onError(error: Exception) {

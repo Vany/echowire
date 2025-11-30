@@ -1,4 +1,4 @@
-package com.uh
+package com.uh.config
 
 /**
  * Configuration for UH service.

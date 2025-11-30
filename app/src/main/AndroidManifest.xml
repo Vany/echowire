@@ -19,7 +19,7 @@
         android:theme="@style/Theme.MaterialComponents.DayNight.DarkActionBar">
         
         <activity
-            android:name=".MainActivity"
+            android:name=".ui.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,7 +28,7 @@
         </activity>
 
         <service
-            android:name=".UhService"
+            android:name=".service.UhService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone" />

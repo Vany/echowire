@@ -1,4 +1,4 @@
-package com.uh
+package com.uh.config
 
 import android.util.Log
 import org.json.JSONObject
