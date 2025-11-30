@@ -5,6 +5,8 @@ import android.util.Log
 import org.tensorflow.lite.Interpreter
 import java.io.File
 import java.io.FileInputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.ReentrantLock
@@ -190,6 +192,9 @@ class WhisperModel(
     /**
      * Run inference on mel spectrogram
      * 
+     * FIXED: Based on vilassn/whisper_android working implementation
+     * Model outputs INT32 token IDs in ByteBuffer (not floats, not logits!)
+     * 
      * @param melSpectrogram Input mel spectrogram [numFrames × 80]
      * @return Token IDs [sequenceLength]
      * 
@@ -204,42 +209,49 @@ class WhisperModel(
             // Prepare input tensor [1, 80, 3000]
             val inputTensor = prepareInputTensor(melSpectrogram)
             
-            // CRITICAL: Check if output is logits or token IDs
-            // Try reading as float first (logits)
-            val outputTensorFloat = Array(1) { Array(MAX_TOKEN_SEQUENCE) { FloatArray(VOCAB_SIZE) } }
+            // Get output tensor information
+            val outputTensor = interpreter!!.getOutputTensor(0)
+            val outputShape = outputTensor.shape()
+            val outputDataType = outputTensor.dataType()
             
-            try {
-                // Try inference with float output (logits)
-                interpreter!!.run(inputTensor, outputTensorFloat)
-                
-                // Apply argmax to get token IDs
-                val tokenIds = IntArray(MAX_TOKEN_SEQUENCE) { seqIdx ->
-                    outputTensorFloat[0][seqIdx].indices.maxByOrNull { 
-                        outputTensorFloat[0][seqIdx][it] 
-                    } ?: 0
+            Log.d(TAG, "Output shape: ${outputShape.contentToString()}")
+            Log.d(TAG, "Output data type: $outputDataType")
+            
+            // Calculate output buffer size
+            val outputSize = outputShape.reduce { a, b -> a * b }
+            Log.d(TAG, "Output total elements: $outputSize")
+            
+            // Allocate output buffer
+            // Model outputs token IDs as INT32 in ByteBuffer
+            val outputBuffer = ByteBuffer.allocateDirect(outputSize * 4)  // 4 bytes per int32
+            outputBuffer.order(ByteOrder.nativeOrder())
+            
+            // Run inference
+            interpreter!!.run(inputTensor, outputBuffer)
+            
+            // Read token IDs from buffer
+            outputBuffer.rewind()
+            val maxTokens = minOf(MAX_TOKEN_SEQUENCE, outputSize)
+            val tokenIds = IntArray(maxTokens)
+            
+            for (i in 0 until maxTokens) {
+                if (outputBuffer.remaining() >= 4) {
+                    tokenIds[i] = outputBuffer.getInt()
+                } else {
+                    break
                 }
-                
-                val inferenceTime = System.currentTimeMillis() - startTime
-                Log.d(TAG, "Inference completed in ${inferenceTime}ms (logits → argmax)")
-                Log.d(TAG, "First 10 tokens: ${tokenIds.take(10).joinToString()}")
-                Log.d(TAG, "Max logit values: ${tokenIds.take(5).map { 
-                    outputTensorFloat[0][0][it] 
-                }.joinToString()}")
-                
-                return@withLock tokenIds
-                
-            } catch (e: Exception) {
-                // Fallback: try reading as int (token IDs directly)
-                Log.w(TAG, "Float output failed, trying int output: ${e.message}")
-                val outputTensorInt = Array(1) { IntArray(MAX_TOKEN_SEQUENCE) }
-                interpreter!!.run(inputTensor, outputTensorInt)
-                
-                val inferenceTime = System.currentTimeMillis() - startTime
-                Log.d(TAG, "Inference completed in ${inferenceTime}ms (direct token IDs)")
-                Log.d(TAG, "First 10 tokens: ${outputTensorInt[0].take(10).joinToString()}")
-                
-                return@withLock outputTensorInt[0]
             }
+            
+            val inferenceTime = System.currentTimeMillis() - startTime
+            Log.d(TAG, "Inference completed in ${inferenceTime}ms")
+            Log.d(TAG, "First 20 tokens: ${tokenIds.take(20).joinToString()}")
+            
+            // Log some token statistics
+            val nonZeroTokens = tokenIds.count { it != 0 }
+            val uniqueTokens = tokenIds.filter { it != 0 }.toSet().size
+            Log.d(TAG, "Token stats: $nonZeroTokens non-zero, $uniqueTokens unique")
+            
+            return@withLock tokenIds
         }
     }
     
