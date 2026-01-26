@@ -70,6 +70,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
 
     // Track last partial result to send only new words
     private var lastPartialText = ""
+    private var sentWords = mutableSetOf<String>()  // Track all sent words in this session
 
     // Network
     private var webSocketServer: UhWebSocketServer? = null
@@ -322,17 +323,18 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
         // Skip empty partial results
         if (partialText.isBlank()) return
 
-        // Extract only new words that weren't in the last partial result
-        val newWords = if (partialText.startsWith(lastPartialText) && partialText.length > lastPartialText.length) {
-            partialText.substring(lastPartialText.length).trim()
-        } else {
-            partialText
-        }
+        // Split into words and filter out already sent ones
+        val currentWords = partialText.lowercase().split("\\s+".toRegex()).filter { it.isNotBlank() }
+        val newWords = currentWords.filter { word -> !sentWords.contains(word) }
 
         // Only broadcast if there are new words
-        if (newWords.isNotBlank()) {
-            webSocketServer?.broadcastPartialResult(newWords, sessionStartTime)
-            listener?.onPartialResult(newWords)
+        if (newWords.isNotEmpty()) {
+            val newText = newWords.joinToString(" ")
+            webSocketServer?.broadcastPartialResult(newText, sessionStartTime)
+            listener?.onPartialResult(newText)
+
+            // Track sent words
+            sentWords.addAll(newWords)
         }
 
         lastPartialText = partialText
@@ -345,6 +347,22 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
         sessionDurationMs: Long,
         speechDurationMs: Long
     ) {
+        val bestText = results.firstOrNull() ?: ""
+        val bestConfidence = confidenceScores.firstOrNull() ?: 0f
+
+        // Send only new words from final result that weren't in partials
+        if (bestText.isNotBlank()) {
+            val finalWords = bestText.lowercase().split("\\s+".toRegex()).filter { it.isNotBlank() }
+            val newWords = finalWords.filter { word -> !sentWords.contains(word) }
+
+            if (newWords.isNotEmpty()) {
+                val newText = newWords.joinToString(" ")
+                webSocketServer?.broadcastPartialResult(newText, sessionStartTime)
+                listener?.onPartialResult(newText)
+            }
+        }
+
+        // Still broadcast full final result with metadata for clients that need it
         webSocketServer?.broadcastFinalResult(
             alternatives = results,
             confidenceScores = confidenceScores,
@@ -354,8 +372,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
             speechStart = speechStartTime,
             speechDurationMs = speechDurationMs
         )
-        val bestText = results.firstOrNull() ?: ""
-        val bestConfidence = confidenceScores.firstOrNull() ?: 0f
+
         listener?.onFinalResult(bestText, bestConfidence, currentLanguage)
     }
 
@@ -370,6 +387,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     override fun onReadyForSpeech(timestamp: Long) {
         sessionStartTime = timestamp
         lastPartialText = ""  // Reset partial text tracker
+        sentWords.clear()  // Reset sent words tracker for new session
         // Don't broadcast recognition_event
     }
 
