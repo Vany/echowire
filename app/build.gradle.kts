@@ -11,10 +11,9 @@ android {
         applicationId = "com.uh"
         minSdk = 31
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
-        
-        // Support for native libraries
+        versionCode = 2
+        versionName = "2.0"
+
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
         }
@@ -42,7 +41,7 @@ android {
     buildFeatures {
         viewBinding = true
     }
-    
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -51,50 +50,17 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
-    
-    // Prevent compression of model files for faster loading
-    androidResources {
-        noCompress += listOf("tflite", "onnx", "json")
-    }
 }
 
 dependencies {
-    // AndroidX core
+    // AndroidX
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
-    
-    // Lifecycle components
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.lifecycle:lifecycle-service:2.6.2")
-    
+
     // WebSocket server
     implementation("org.java-websocket:Java-WebSocket:1.5.5")
-    
-    // JSON
-    implementation("org.json:json:20231013")
-    
-    // Speech Recognition - TensorFlow Lite
-    // Using 2.14.0 - last stable version before namespace conflicts
-    // 2.15.0+ has litert-support conflicts and GPU delegate issues
-    implementation("org.tensorflow:tensorflow-lite:2.14.0") {
-        exclude(group = "com.google.ai.edge.litert")
-    }
-    implementation("org.tensorflow:tensorflow-lite-support:0.4.4") {
-        exclude(group = "com.google.ai.edge.litert")
-    }
-    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0") {
-        exclude(group = "com.google.ai.edge.litert")
-    }
-    
-    // Text Embeddings - ONNX Runtime (works on all ARM64)
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.16.3")
-    
-    // Coroutines for async operations
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    
-    // FFT library for mel spectrogram generation
-    implementation("com.github.wendykierp:JTransforms:3.1")
 }

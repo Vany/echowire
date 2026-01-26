@@ -11,18 +11,17 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
-import androidx.core.app.ActivityCompat.OnRequestPermissionsResultCallback
 import androidx.core.content.ContextCompat
 import com.uh.R
 import com.uh.service.UhService
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Main activity for UH application.
- * Displays connection status, event log, and service control buttons.
- * Binds to UhService for real-time updates.
+ * Main activity: service control, real-time status, event log.
  */
 class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
@@ -32,6 +31,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private lateinit var nameTextView: TextView
+    private lateinit var ipAddressTextView: TextView
     private lateinit var connectionIndicator: TextView
     private lateinit var logTextView: TextView
     private lateinit var startButton: Button
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private lateinit var dbMeterView: DbMeterView
 
     private var uhService: UhService? = null
-    private var serviceBound: Boolean = false
+    private var serviceBound = false
 
     private val logLines = mutableListOf<String>()
     private val dateFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
@@ -51,18 +51,14 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             uhService = binder.getService()
             uhService?.setListener(this@MainActivity)
             serviceBound = true
-            
-            // Update UI with current state
+
             runOnUiThread {
                 updateConnectionIndicator(uhService?.getClientCount() ?: 0)
                 updateButtons(uhService?.isServiceRunning() ?: false)
-                
-                // Read current configuration
-                val currentName = uhService?.getConfigValue("name") ?: "UH Service"
-                nameTextView.text = currentName
-                
+                nameTextView.text = uhService?.getConfigValue("name") ?: "UH Service"
                 val port = uhService?.getServerPort() ?: 0
                 if (port > 0) {
+                    updateIpAddress(port)
                     addLog("Service bound - port $port")
                 }
             }
@@ -85,6 +81,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         setContentView(R.layout.activity_main)
 
         nameTextView = findViewById(R.id.nameTextView)
+        ipAddressTextView = findViewById(R.id.ipAddressTextView)
         connectionIndicator = findViewById(R.id.connectionIndicator)
         logTextView = findViewById(R.id.logTextView)
         startButton = findViewById(R.id.startButton)
@@ -102,9 +99,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     override fun onStart() {
         super.onStart()
-        // Try to bind to service if it's running
-        val intent = Intent(this, UhService::class.java)
-        bindService(intent, serviceConnection, 0)
+        bindService(Intent(this, UhService::class.java), serviceConnection, 0)
     }
 
     override fun onStop() {
@@ -117,60 +112,44 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private fun startService() {
-        // Check for RECORD_AUDIO permission before starting service
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
-            != PackageManager.PERMISSION_GRANTED) {
-            // Request permission
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                RECORD_AUDIO_REQUEST_CODE
+                this, arrayOf(Manifest.permission.RECORD_AUDIO), RECORD_AUDIO_REQUEST_CODE
             )
             addLog("Requesting microphone permission...")
             return
         }
-        
-        // Permission already granted, start service
         startServiceInternal()
     }
-    
+
     private fun startServiceInternal() {
         val intent = Intent(this, UhService::class.java)
         ContextCompat.startForegroundService(this, intent)
-        
-        // Bind to service to receive updates
         bindService(intent, serviceConnection, 0)
-        
         addLog("Starting service...")
     }
-    
-    override fun onRequestPermissionsResult(
-        requestCode: Int, 
-        permissions: Array<String>, 
-        grantResults: IntArray
-    ) {
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        
         if (requestCode == RECORD_AUDIO_REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 addLog("Microphone permission granted")
                 startServiceInternal()
             } else {
-                addLog("ERROR: Microphone permission denied - cannot function without microphone")
+                addLog("ERROR: Microphone permission denied")
             }
         }
     }
 
     private fun stopService() {
-        val intent = Intent(this, UhService::class.java)
-        stopService(intent)
-        
+        stopService(Intent(this, UhService::class.java))
         if (serviceBound) {
             uhService?.setListener(null)
             unbindService(serviceConnection)
             serviceBound = false
         }
-        
         runOnUiThread {
             updateConnectionIndicator(0)
             updateButtons(false)
@@ -181,14 +160,10 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private fun updateConnectionIndicator(clientCount: Int) {
         if (clientCount > 0) {
             connectionIndicator.text = getString(R.string.connected_indicator, clientCount)
-            connectionIndicator.setBackgroundColor(
-                ContextCompat.getColor(this, R.color.connected_green)
-            )
+            connectionIndicator.setBackgroundColor(ContextCompat.getColor(this, R.color.connected_green))
         } else {
             connectionIndicator.text = getString(R.string.not_connected)
-            connectionIndicator.setBackgroundColor(
-                ContextCompat.getColor(this, R.color.disconnected_red)
-            )
+            connectionIndicator.setBackgroundColor(ContextCompat.getColor(this, R.color.disconnected_red))
         }
     }
 
@@ -197,32 +172,53 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         stopButton.isEnabled = serviceRunning
     }
 
+    private fun updateIpAddress(port: Int) {
+        val ip = getDeviceIpAddress()
+        if (ip != null && port > 0) {
+            ipAddressTextView.text = getString(R.string.ip_address_format, ip, port)
+        } else {
+            ipAddressTextView.text = getString(R.string.ip_address_unknown)
+        }
+    }
+
+    private fun getDeviceIpAddress(): String? {
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces() ?: return null
+            for (intf in interfaces) {
+                if (intf.isLoopback || !intf.isUp) continue
+                val name = intf.name.lowercase()
+                if (!name.startsWith("wlan") && !name.startsWith("eth") && !name.startsWith("en")) continue
+                for (addr in intf.inetAddresses) {
+                    if (addr is Inet4Address && !addr.isLoopbackAddress) return addr.hostAddress
+                }
+            }
+        } catch (e: Exception) {
+            addLog("Failed to get IP: ${e.message}")
+        }
+        return null
+    }
+
     private fun addLog(message: String) {
         val timestamp = dateFormat.format(Date())
-        val logEntry = "[$timestamp] $message"
-        
+        val entry = "[$timestamp] $message"
         synchronized(logLines) {
-            logLines.add(logEntry)
-            if (logLines.size > MAX_LOG_LINES) {
-                logLines.removeAt(0)
-            }
+            logLines.add(entry)
+            if (logLines.size > MAX_LOG_LINES) logLines.removeAt(0)
         }
-        
         runOnUiThread {
             logTextView.text = logLines.joinToString("\n")
-            // Auto-scroll to bottom
-            val scrollView = logTextView.parent as? android.widget.ScrollView
-            scrollView?.post {
-                scrollView.fullScroll(android.view.View.FOCUS_DOWN)
+            (logTextView.parent as? android.widget.ScrollView)?.post {
+                (logTextView.parent as android.widget.ScrollView).fullScroll(android.view.View.FOCUS_DOWN)
             }
         }
     }
 
-    // ServiceListener implementation - called from background threads
-    
+    // === ServiceListener ===
+
     override fun onServiceStarted(port: Int) {
         runOnUiThread {
             updateButtons(true)
+            updateIpAddress(port)
             addLog("Service started on port $port")
         }
     }
@@ -231,6 +227,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         runOnUiThread {
             updateButtons(false)
             updateConnectionIndicator(0)
+            ipAddressTextView.text = getString(R.string.ip_address_unknown)
             addLog("Service stopped")
         }
     }
@@ -251,96 +248,50 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     override fun onError(message: String, exception: Exception?) {
         runOnUiThread {
-            val errorMsg = if (exception != null) {
-                "$message: ${exception.message}"
-            } else {
-                message
-            }
-            addLog("ERROR: $errorMsg")
-            // Set waveform to red on error
-            waveformView.setState(com.uh.ui.WaveformView.State.ERROR)
+            val msg = if (exception != null) "$message: ${exception.message}" else message
+            addLog("ERROR: $msg")
+            waveformView.setState(WaveformView.State.ERROR)
         }
     }
 
     override fun onConfigChanged(key: String, value: String?) {
         runOnUiThread {
-            when (key) {
-                "name" -> {
-                    nameTextView.text = value ?: "UH Service"
-                    addLog("Config updated: name = $value")
-                }
-                else -> {
-                    addLog("Config updated: $key = $value")
-                }
-            }
+            if (key == "name") nameTextView.text = value ?: "UH Service"
+            addLog("Config: $key = $value")
         }
     }
-    
-    // Model management callbacks
-    
-    override fun onModelDownloadProgress(modelName: String, progress: Float, downloaded: Long, total: Long) {
-        runOnUiThread {
-            val downloadedMB = downloaded / (1024 * 1024)
-            if (total > 0) {
-                // Known file size - show percentage and totals
-                val totalMB = total / (1024 * 1024)
-                val percentage = (progress * 100).toInt()
-                addLog("Extracting $modelName: $percentage% ($downloadedMB MB / $totalMB MB)")
-            } else {
-                // Compressed file - show bytes extracted only
-                addLog("Extracting $modelName: $downloadedMB MB (compressed)")
-            }
-        }
+
+    override fun onAudioLevelChanged(rmsDb: Float) {
+        // Convert dB to 0..1 range: Android STT rmsDb is typically -2 to 10
+        val normalized = ((rmsDb + 2f) / 12f).coerceIn(0f, 1f)
+        waveformView.addSample(normalized)
+        dbMeterView.addSample(normalized)
     }
-    
-    override fun onModelLoading(status: String) {
-        runOnUiThread {
-            addLog(status)
-        }
-    }
-    
-    override fun onModelLoaded(status: String) {
-        runOnUiThread {
-            addLog(status)
-        }
-    }
-    
-    // Audio capture callbacks
-    
-    override fun onAudioLevelChanged(level: Float) {
-        // Update waveform and DB meter with audio level
-        waveformView.addSample(level)
-        dbMeterView.addSample(level)
-    }
-    
+
     override fun onListeningStateChanged(listening: Boolean) {
         runOnUiThread {
             if (listening) {
-                addLog("Listening started - microphone active")
-                waveformView.setState(com.uh.ui.WaveformView.State.IDLE)
+                addLog("Listening")
+                waveformView.setState(WaveformView.State.IDLE)
             } else {
-                addLog("Listening stopped")
+                addLog("Stopped listening")
                 waveformView.clear()
                 dbMeterView.clear()
             }
         }
     }
-    
-    // Speech recognition callbacks
-    
-    override fun onTranscriptionReceived(text: String, language: String?, processingTimeMs: Long) {
+
+    override fun onPartialResult(text: String) {
         runOnUiThread {
-            val langLabel = language?.let { "[$it]" } ?: ""
-            addLog("Speech $langLabel (${processingTimeMs}ms): \"$text\"")
-            // Return to idle state after transcription completes
-            waveformView.setState(com.uh.ui.WaveformView.State.IDLE)
+            addLog("... $text")
+            waveformView.setState(WaveformView.State.RECOGNIZING)
         }
     }
-    
-    override fun onProcessingStarted() {
+
+    override fun onFinalResult(text: String, confidence: Float, language: String) {
         runOnUiThread {
-            // Set waveform to yellow during recognition
-            waveformView.setState(com.uh.ui.WaveformView.State.RECOGNIZING)
+            addLog("[$language] \"$text\" (${"%.0f".format(confidence * 100)}%)")
+            waveformView.setState(WaveformView.State.IDLE)
         }
     }
 }
