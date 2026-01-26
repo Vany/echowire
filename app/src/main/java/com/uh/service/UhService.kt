@@ -68,6 +68,9 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private var sessionStartTime = 0L
     private var speechStartTime = 0L
 
+    // Track last partial result to send only new words
+    private var lastPartialText = ""
+
     // Network
     private var webSocketServer: UhWebSocketServer? = null
     private var serverPort: Int = 0
@@ -125,6 +128,14 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     fun getServerPort(): Int = serverPort
     fun isServiceRunning(): Boolean = isRunning
     fun getConfigValue(key: String): String? = runtimeConfig.get(key)
+
+    fun setLanguage(languageCode: String) {
+        if (currentLanguage != languageCode) {
+            runtimeConfig.set("language", languageCode)
+        }
+    }
+
+    fun getCurrentLanguage(): String = currentLanguage
 
     // Startup
 
@@ -308,8 +319,23 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     // RecognitionEventListener callbacks
 
     override fun onPartialResult(partialText: String, timestamp: Long) {
-        webSocketServer?.broadcastPartialResult(partialText, sessionStartTime)
-        listener?.onPartialResult(partialText)
+        // Skip empty partial results
+        if (partialText.isBlank()) return
+
+        // Extract only new words that weren't in the last partial result
+        val newWords = if (partialText.startsWith(lastPartialText) && partialText.length > lastPartialText.length) {
+            partialText.substring(lastPartialText.length).trim()
+        } else {
+            partialText
+        }
+
+        // Only broadcast if there are new words
+        if (newWords.isNotBlank()) {
+            webSocketServer?.broadcastPartialResult(newWords, sessionStartTime)
+            listener?.onPartialResult(newWords)
+        }
+
+        lastPartialText = partialText
     }
 
     override fun onFinalResult(
@@ -335,8 +361,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
 
     override fun onRmsChanged(rmsdB: Float, timestamp: Long) {
         if (timestamp - lastAudioLevelBroadcast >= AUDIO_LEVEL_THROTTLE_MS) {
-            val listening = speechRecognizer?.isListening() ?: false
-            webSocketServer?.broadcastAudioLevel(rmsdB, listening)
+            // Only update UI, don't broadcast to WebSocket clients
             lastAudioLevelBroadcast = timestamp
             listener?.onAudioLevelChanged(rmsdB)
         }
@@ -344,19 +369,23 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
 
     override fun onReadyForSpeech(timestamp: Long) {
         sessionStartTime = timestamp
-        webSocketServer?.broadcastRecognitionEvent("ready_for_speech", true)
+        lastPartialText = ""  // Reset partial text tracker
+        // Don't broadcast recognition_event
     }
 
     override fun onBeginningOfSpeech(timestamp: Long) {
         speechStartTime = timestamp
-        webSocketServer?.broadcastRecognitionEvent("speech_start", true)
+        // Don't broadcast recognition_event
     }
 
     override fun onEndOfSpeech(timestamp: Long) {
-        webSocketServer?.broadcastRecognitionEvent("speech_end", true)
+        // Don't broadcast recognition_event
     }
 
     override fun onError(errorCode: Int, errorMessage: String, timestamp: Long) {
+        // Skip "No speech match" errors (code 7) - this is normal when user is silent
+        if (errorCode == 7) return
+
         val autoRestart = speechRecognizer?.isListening() == false
         webSocketServer?.broadcastRecognitionError(errorCode, errorMessage, autoRestart)
         listener?.onError("Recognition error: $errorMessage", null)
@@ -364,8 +393,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
 
     override fun onStateChanged(isListening: Boolean) {
         listener?.onListeningStateChanged(isListening)
-        val event = if (isListening) "listening_started" else "listening_stopped"
-        webSocketServer?.broadcastRecognitionEvent(event, isListening)
+        // Don't broadcast recognition_event
     }
 
     // Shutdown

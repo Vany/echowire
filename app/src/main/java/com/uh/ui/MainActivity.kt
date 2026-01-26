@@ -36,8 +36,12 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     private lateinit var logTextView: TextView
     private lateinit var startButton: Button
     private lateinit var stopButton: Button
+    private lateinit var languageEnButton: Button
+    private lateinit var languageRuButton: Button
     private lateinit var waveformView: WaveformView
     private lateinit var dbMeterView: DbMeterView
+
+    private var currentLanguage = "en-US"
 
     private var uhService: UhService? = null
     private var serviceBound = false
@@ -56,6 +60,11 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
                 updateConnectionIndicator(uhService?.getClientCount() ?: 0)
                 updateButtons(uhService?.isServiceRunning() ?: false)
                 nameTextView.text = uhService?.getConfigValue("name") ?: "UH Service"
+
+                // Sync language with service
+                currentLanguage = uhService?.getCurrentLanguage() ?: "en-US"
+                updateLanguageButtons()
+
                 val port = uhService?.getServerPort() ?: 0
                 if (port > 0) {
                     updateIpAddress(port)
@@ -86,15 +95,58 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         logTextView = findViewById(R.id.logTextView)
         startButton = findViewById(R.id.startButton)
         stopButton = findViewById(R.id.stopButton)
+        languageEnButton = findViewById(R.id.languageEnButton)
+        languageRuButton = findViewById(R.id.languageRuButton)
         waveformView = findViewById(R.id.waveformView)
         dbMeterView = findViewById(R.id.dbMeterView)
 
         startButton.setOnClickListener { startService() }
         stopButton.setOnClickListener { stopService() }
+        languageEnButton.setOnClickListener { setLanguage("en-US") }
+        languageRuButton.setOnClickListener { setLanguage("ru-RU") }
 
         updateConnectionIndicator(0)
         updateButtons(false)
+        updateLanguageButtons()
         addLog("Activity created")
+    }
+
+    private fun setLanguage(languageCode: String) {
+        currentLanguage = languageCode
+        updateLanguageButtons()
+
+        uhService?.let { service ->
+            // Send language change command to service via RuntimeConfig
+            val command = "{\"command\":\"set_config\",\"key\":\"language\",\"value\":\"$languageCode\"}"
+            addLog("Setting language to $languageCode")
+            // The service will handle this through its WebSocket command handler
+            // For now, we'll use a direct method call
+            changeServiceLanguage(languageCode)
+        } ?: run {
+            addLog("Language set to $languageCode (will apply when service starts)")
+        }
+    }
+
+    private fun changeServiceLanguage(languageCode: String) {
+        uhService?.setLanguage(languageCode)
+    }
+
+    private fun updateLanguageButtons() {
+        // Visual feedback: highlight selected language
+        val selectedColor = ContextCompat.getColor(this, R.color.connected_green)
+        val defaultColor = ContextCompat.getColor(this, android.R.color.darker_gray)
+
+        when (currentLanguage) {
+            "en-US" -> {
+                languageEnButton.setBackgroundColor(selectedColor)
+                languageRuButton.setBackgroundColor(defaultColor)
+            }
+
+            "ru-RU" -> {
+                languageEnButton.setBackgroundColor(defaultColor)
+                languageRuButton.setBackgroundColor(selectedColor)
+            }
+        }
     }
 
     override fun onStart() {
