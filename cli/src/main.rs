@@ -10,12 +10,12 @@ use tokio::time::timeout;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
-const SERVICE_TYPE: &str = "_uh._tcp.local.";
+const SERVICE_TYPE: &str = "_echowire._tcp.local.";
 const DISCOVERY_TIMEOUT_SECS: u64 = 5;
 const CONFIG_RESPONSE_TIMEOUT_SECS: u64 = 3;
 
 #[derive(Debug, Clone)]
-struct UhService {
+struct EchoWireService {
     name: String,
     host: String,
     port: u16,
@@ -69,7 +69,7 @@ struct ConfigureResponse {
 
 #[derive(Parser)]
 #[command(name = "uhcli")]
-#[command(about = "UH WebSocket Client - Control and monitor UH services", long_about = None)]
+#[command(about = "EchoWire WebSocket Client - Control and monitor EchoWire services", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -77,20 +77,20 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Listen to messages from a UH service (default behavior)
+    /// Listen to messages from an EchoWire service (default behavior)
     Listen,
-    
-    /// Set a configuration value on a UH service
-    /// 
+
+    /// Set a configuration value on an EchoWire service
+    ///
     /// Example: uhcli set name=MyDevice
     Set {
         /// Configuration key=value pair (e.g., name=MyDevice)
         #[arg(value_parser = parse_key_value)]
         config: (String, String),
     },
-    
-    /// Get a configuration value from a UH service
-    /// 
+
+    /// Get a configuration value from an EchoWire service
+    ///
     /// Example: uhcli get name
     Get {
         /// Configuration key to retrieve
@@ -100,35 +100,38 @@ enum Commands {
 
 /// Parse key=value pair from command line argument.
 fn parse_key_value(s: &str) -> Result<(String, String), String> {
-    let pos = s.find('=')
+    let pos = s
+        .find('=')
         .ok_or_else(|| format!("Invalid KEY=VALUE format: no '=' found in '{}'", s))?;
-    
+
     let key = s[..pos].trim().to_string();
     let value = s[pos + 1..].trim().to_string();
-    
+
     if key.is_empty() {
         return Err("Key cannot be empty".to_string());
     }
-    
+
     // Remove quotes if present
     let value = value.trim_matches('"').trim_matches('\'').to_string();
-    
+
     Ok((key, value))
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    
-    println!("UH CLI - WebSocket Client");
-    println!("=========================\n");
+
+    println!("EchoWire CLI - WebSocket Client");
+    println!("================================\n");
 
     // Discover services
     let services = discover_services().await?;
 
     if services.is_empty() {
-        println!("No UH services found on the network.");
-        println!("Make sure the UH Android app is running and advertising on the same network.");
+        println!("No EchoWire services found on the network.");
+        println!(
+            "Make sure the EchoWire Android app is running and advertising on the same network."
+        );
         return Ok(());
     }
 
@@ -153,7 +156,9 @@ async fn main() -> Result<()> {
         Commands::Listen => {
             listen_to_service(selected).await?;
         }
-        Commands::Set { config: (key, value) } => {
+        Commands::Set {
+            config: (key, value),
+        } => {
             send_configure_set(selected, &key, &value).await?;
         }
         Commands::Get { key } => {
@@ -164,10 +169,13 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Discover UH services via mDNS.
+/// Discover EchoWire services via mDNS.
 /// Returns list of discovered services after timeout.
-async fn discover_services() -> Result<Vec<UhService>> {
-    println!("Discovering services ({}s timeout)...\n", DISCOVERY_TIMEOUT_SECS);
+async fn discover_services() -> Result<Vec<EchoWireService>> {
+    println!(
+        "Discovering services ({}s timeout)...\n",
+        DISCOVERY_TIMEOUT_SECS
+    );
 
     let mdns = ServiceDaemon::new().context("Failed to create mDNS daemon")?;
     let receiver = mdns
@@ -184,13 +192,16 @@ async fn discover_services() -> Result<Vec<UhService>> {
                     let addresses: Vec<IpAddr> = info.get_addresses().iter().copied().collect();
 
                     if !addresses.is_empty() {
-                        let service = UhService {
+                        let service = EchoWireService {
                             name: info.get_fullname().to_string(),
                             host: info.get_hostname().to_string(),
                             port: info.get_port(),
                             addresses,
                         };
-                        println!("  Found: {} at {}:{}", service.name, service.host, service.port);
+                        println!(
+                            "  Found: {} at {}:{}",
+                            service.name, service.host, service.port
+                        );
                         services.push(service);
                     }
                 }
@@ -228,7 +239,7 @@ fn format_address_for_url(addr: &IpAddr) -> String {
 }
 
 /// Connect to selected service and listen to broadcast messages.
-async fn listen_to_service(service: &UhService) -> Result<()> {
+async fn listen_to_service(service: &EchoWireService) -> Result<()> {
     let address = service
         .addresses
         .first()
@@ -292,7 +303,7 @@ async fn listen_to_service(service: &UhService) -> Result<()> {
 }
 
 /// Send configure message to set a value and display response.
-async fn send_configure_set(service: &UhService, key: &str, value: &str) -> Result<()> {
+async fn send_configure_set(service: &EchoWireService, key: &str, value: &str) -> Result<()> {
     let address = service
         .addresses
         .first()
@@ -316,12 +327,13 @@ async fn send_configure_set(service: &UhService, key: &str, value: &str) -> Resu
         configure: key.to_string(),
         value: Some(value.to_string()),
     };
-    
-    let request_json = serde_json::to_string(&request)
-        .context("Failed to serialize configure request")?;
-    
+
+    let request_json =
+        serde_json::to_string(&request).context("Failed to serialize configure request")?;
+
     println!("Sending: {}", request_json);
-    write.send(Message::Text(request_json))
+    write
+        .send(Message::Text(request_json))
         .await
         .context("Failed to send configure message")?;
 
@@ -348,23 +360,24 @@ async fn send_configure_set(service: &UhService, key: &str, value: &str) -> Resu
         Err(anyhow!("Connection closed without response"))
     };
 
-    match timeout(Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS), response_future).await {
+    match timeout(
+        Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS),
+        response_future,
+    )
+    .await
+    {
         Ok(Ok(response)) => {
             println!("\nConfiguration updated:");
             println!("  {} = {}", response.configure, response.value);
             Ok(())
         }
-        Ok(Err(e)) => {
-            Err(anyhow!("Failed to receive response: {}", e))
-        }
-        Err(_) => {
-            Err(anyhow!("Timeout waiting for response"))
-        }
+        Ok(Err(e)) => Err(anyhow!("Failed to receive response: {}", e)),
+        Err(_) => Err(anyhow!("Timeout waiting for response")),
     }
 }
 
 /// Send configure message to get a value and display response.
-async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
+async fn send_configure_get(service: &EchoWireService, key: &str) -> Result<()> {
     let address = service
         .addresses
         .first()
@@ -388,12 +401,13 @@ async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
         configure: key.to_string(),
         value: None,
     };
-    
-    let request_json = serde_json::to_string(&request)
-        .context("Failed to serialize configure request")?;
-    
+
+    let request_json =
+        serde_json::to_string(&request).context("Failed to serialize configure request")?;
+
     println!("Sending: {}", request_json);
-    write.send(Message::Text(request_json))
+    write
+        .send(Message::Text(request_json))
         .await
         .context("Failed to send configure message")?;
 
@@ -420,18 +434,19 @@ async fn send_configure_get(service: &UhService, key: &str) -> Result<()> {
         Err(anyhow!("Connection closed without response"))
     };
 
-    match timeout(Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS), response_future).await {
+    match timeout(
+        Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS),
+        response_future,
+    )
+    .await
+    {
         Ok(Ok(response)) => {
             println!("\nCurrent configuration:");
             println!("  {} = {}", response.configure, response.value);
             Ok(())
         }
-        Ok(Err(e)) => {
-            Err(anyhow!("Failed to receive response: {}", e))
-        }
-        Err(_) => {
-            Err(anyhow!("Timeout waiting for response"))
-        }
+        Ok(Err(e)) => Err(anyhow!("Failed to receive response: {}", e)),
+        Err(_) => Err(anyhow!("Timeout waiting for response")),
     }
 }
 
@@ -443,41 +458,41 @@ fn handle_message(text: &str) {
             let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
                 .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
                 .unwrap_or_else(|| msg.timestamp.to_string());
-            
+
             // Display text with language and timing
-            println!("[{}] Speech [{}] ({:.0}ms, RTF={:.2}): \"{}\"", 
-                datetime, 
-                msg.language, 
-                msg.processing_time_ms as f32,
-                msg.rtf,
-                msg.text
+            println!(
+                "[{}] Speech [{}] ({:.0}ms, RTF={:.2}): \"{}\"",
+                datetime, msg.language, msg.processing_time_ms as f32, msg.rtf, msg.text
             );
-            
+
             // Show embedding preview (first 5 values)
-            let embedding_preview: Vec<String> = msg.embedding
+            let embedding_preview: Vec<String> = msg
+                .embedding
                 .iter()
                 .take(5)
                 .map(|v| format!("{:.4}", v))
                 .collect();
-            println!("      Embedding: [{}...] ({} dims)", 
-                embedding_preview.join(", "), 
+            println!(
+                "      Embedding: [{}...] ({} dims)",
+                embedding_preview.join(", "),
                 msg.embedding.len()
             );
             return;
         }
     }
-    
+
     // Try to parse as audio status message
     if let Ok(msg) = serde_json::from_str::<AudioStatusMessage>(text) {
         if msg.msg_type == "audio_status" {
             let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
                 .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
                 .unwrap_or_else(|| msg.timestamp.to_string());
-            
+
             let status = if msg.listening { "LISTENING" } else { "IDLE" };
             let level_bar = "█".repeat((msg.audio_level * 20.0) as usize);
-            println!("[{}] Audio: {} | Level: {:<20} {:.1}%", 
-                datetime, 
+            println!(
+                "[{}] Audio: {} | Level: {:<20} {:.1}%",
+                datetime,
                 status,
                 level_bar,
                 msg.audio_level * 100.0
@@ -485,7 +500,7 @@ fn handle_message(text: &str) {
             return;
         }
     }
-    
+
     // Try to parse as random message (legacy)
     if let Ok(msg) = serde_json::from_str::<RandomMessage>(text) {
         if msg.msg_type == "random" {
@@ -496,13 +511,13 @@ fn handle_message(text: &str) {
             return;
         }
     }
-    
+
     // Try to parse as configure response
     if let Ok(response) = serde_json::from_str::<ConfigureResponse>(text) {
         println!("Config: {} = {}", response.configure, response.value);
         return;
     }
-    
+
     // Unknown message format
     println!("Raw message: {}", text);
 }

@@ -15,8 +15,8 @@ CLI_DIR := cli
 CLI_BINARY := $(CLI_DIR)/target/release/uhcli
 
 help:
-	@echo "UH Android App - Makefile Targets"
-	@echo "=================================="
+	@echo "EchoWire Android App - Makefile Targets"
+	@echo "========================================"
 	@echo "Setup:"
 	@echo "  models        - Download and convert ML models (required first time)"
 	@echo ""
@@ -25,11 +25,11 @@ help:
 	@echo "  install       - Build and install to connected device"
 	@echo "  uninstall     - Uninstall from device"
 	@echo "  clean         - Clean build artifacts"
-	@echo "  logs          - Show logcat filtered for UH app only"
+	@echo "  logs          - Show logcat filtered for EchoWire app only"
 	@echo "  logs-all      - Show all Android runtime errors (all apps)"
 	@echo "  retrieve-logs - Retrieve and save last logs to file"
-	@echo "  start-service - Start UH service on device"
-	@echo "  stop-service  - Stop UH service on device"
+	@echo "  start-service - Start EchoWire service on device"
+	@echo "  stop-service  - Stop EchoWire service on device"
 	@echo ""
 	@echo "CLI Client (Rust):"
 	@echo "  cli-build     - Build uhcli (release mode)"
@@ -66,7 +66,7 @@ uninstall:
 	adb uninstall $(PACKAGE) || echo "App not installed"
 
 logs:
-	@echo "Starting logcat (filtered for UH)..."
+	@echo "Starting logcat (filtered for EchoWire)..."
 	adb logcat -s UhService:* UhWebSocketServer:* MainActivity:* | grep -E "(UhService|UhWebSocketServer|MainActivity|$(PACKAGE))"
 
 logs-all:
@@ -77,17 +77,17 @@ retrieve-logs:
 	@echo "Retrieving last logs from device..."
 	@mkdir -p logs
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
-	LOGFILE="logs/uh_logs_$$TIMESTAMP.txt"; \
+	LOGFILE="logs/echowire_logs_$$TIMESTAMP.txt"; \
 	adb logcat -d -s UhService:* UhWebSocketServer:* MainActivity:* | grep -E "(UhService|UhWebSocketServer|MainActivity|$(PACKAGE))" > $$LOGFILE; \
 	echo "Logs saved to: $$LOGFILE"; \
 	echo "Total lines: $$(wc -l < $$LOGFILE | tr -d ' ')"
 
 start-service:
-	@echo "Starting UH service..."
+	@echo "Starting EchoWire service..."
 	adb shell am start-foreground-service -n $(PACKAGE)/.UhService
 
 stop-service:
-	@echo "Stopping UH service..."
+	@echo "Stopping EchoWire service..."
 	adb shell am stopservice $(PACKAGE)/.UhService
 
 # CLI Client targets

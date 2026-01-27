@@ -7,9 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.0.0] - 2026-01-28
 
-### 🚀 Major Rewrite - Android STT Architecture
+### 🚀 Major Rewrite - Android STT Architecture & EchoWire Rebrand
 
 Complete architecture overhaul replacing Whisper/ONNX pipeline with native Android SpeechRecognizer API.
+Project renamed from "UH" to "EchoWire".
 
 ### Added
 - **Real-time incremental partial results** - Send only new words during speech
@@ -49,6 +50,8 @@ Complete architecture overhaul replacing Whisper/ONNX pipeline with native Andro
 - **Audio level spam** - Throttled to 20 Hz (was 100 Hz)
 - **JSON serialization** - Float array conversion for embeddings
 - **Duplicate word broadcasts** - Incremental partial results prevent duplicates
+- **App branding** - All "UH" references replaced with "EchoWire"
+- **mDNS service** - Updated from `_uh._tcp.local.` to `_echowire._tcp.local.`
 
 ### Performance
 - **Latency:** 100-300ms (target met)
