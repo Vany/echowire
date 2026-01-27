@@ -47,7 +47,7 @@ class UhWebSocketServer(
      * Contains device name for client-side authentication/identification.
      */
     private fun sendHandshake(conn: WebSocket) {
-        val deviceName = runtimeConfig.get("name") ?: "UH Service"
+        val deviceName = runtimeConfig.get("name") ?: "EchoWire Service"
         val message = JSONObject().apply {
             put("type", "hello")
             put("device_name", deviceName)

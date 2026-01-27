@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
             runOnUiThread {
                 updateConnectionIndicator(uhService?.getClientCount() ?: 0)
                 updateButtons(uhService?.isServiceRunning() ?: false)
-                nameTextView.text = uhService?.getConfigValue("name") ?: "UH Service"
+                nameTextView.text = uhService?.getConfigValue("name") ?: "EchoWire Service"
 
                 // Sync language with service
                 currentLanguage = uhService?.getCurrentLanguage() ?: "en-US"
@@ -308,7 +308,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     override fun onConfigChanged(key: String, value: String?) {
         runOnUiThread {
-            if (key == "name") nameTextView.text = value ?: "UH Service"
+            if (key == "name") nameTextView.text = value ?: "EchoWire Service"
             addLog("Config: $key = $value")
         }
     }

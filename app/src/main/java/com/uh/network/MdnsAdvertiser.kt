@@ -8,14 +8,14 @@ import android.util.Log
 
 /**
  * mDNS service advertiser for WebSocket server discovery.
- * 
+ *
  * Advertises a service on the local network using mDNS/DNS-SD protocol.
  * Manages multicast lock acquisition/release for WiFi compatibility.
- * 
+ *
  * Thread-safe: All mDNS operations run on NsdManager's internal thread.
- * 
+ *
  * @param context Android context for system services
- * @param serviceType mDNS service type (e.g., "_uh._tcp.")
+ * @param serviceType mDNS service type (e.g., "_echowire._tcp.")
  * @param serviceName Human-readable service name
  * @param onError Error callback for registration failures
  */
@@ -32,16 +32,16 @@ class MdnsAdvertiser(
     private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var multicastLock: WifiManager.MulticastLock? = null
-    
+
     @Volatile
     private var isRegistered: Boolean = false
 
     /**
      * Register mDNS service with specified port.
-     * 
+     *
      * CRITICAL: Acquires multicast lock before registration.
      * Lock is released on error or during unregister().
-     * 
+     *
      * @param port WebSocket server port to advertise
      */
     fun register(port: Int) {

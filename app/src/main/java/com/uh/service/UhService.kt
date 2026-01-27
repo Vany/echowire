@@ -34,7 +34,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
 
     companion object {
         private const val TAG = "UhService"
-        private const val NOTIFICATION_CHANNEL_ID = "uh_service_channel"
+        private const val NOTIFICATION_CHANNEL_ID = "echowire_service_channel"
         private const val NOTIFICATION_ID = 1
         private const val AUDIO_LEVEL_THROTTLE_MS = 30L  // ~33 Hz max
     }
@@ -160,7 +160,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
-            "UH Speech Service",
+            "EchoWire Speech Service",
             NotificationManager.IMPORTANCE_LOW
         ).apply { description = "Continuous speech recognition" }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -171,7 +171,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val text = if (port > 0) "Listening on port $port" else "Starting..."
         return NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setContentTitle("UH Speech")
+            .setContentTitle("EchoWire")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)

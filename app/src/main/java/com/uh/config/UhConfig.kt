@@ -6,8 +6,8 @@ package com.uh.config
  * Future: expose via UI, load from preferences/file.
  */
 data class UhConfig(
-    val mdnsServiceType: String = "_uh._tcp.",
-    val mdnsServiceName: String = "UH_Service",
+    val mdnsServiceType: String = "_echowire._tcp.",
+    val mdnsServiceName: String = "EchoWire_Service",
     val websocketStartPort: Int = 8080,
     val websocketMaxPortSearch: Int = 100,
     val randomNumberIntervalMs: Long = 1000,
