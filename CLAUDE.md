@@ -30,9 +30,9 @@ Use git commits to document project history and decisions.
 ```
 Android SpeechRecognizer API
     -> EnhancedAndroidSpeechRecognizer (continuous, auto-restart)
-        -> UhService (foreground service, RecognitionEventListener)
-            -> UhWebSocketServer (broadcast JSON to all clients)
-            -> MdnsAdvertiser (_uh._tcp.local.)
+        -> EchoWireService (foreground service, RecognitionEventListener)
+            -> EchoWireWebSocketServer (broadcast JSON to all clients)
+            -> MdnsAdvertiser (_echowire._tcp.local.)
             -> MainActivity (UI: waveform, dB meter, log)
 ```
 
@@ -40,12 +40,12 @@ No ML models, no embeddings, no TFLite, no ONNX. Pure platform STT.
 
 ### Source Structure
 ```
-com.uh/
-├── service/UhService.kt          # Foreground service, STT -> WebSocket
+com.echowire/
+├── service/EchoWireService.kt    # Foreground service, STT -> WebSocket
 ├── ml/EnhancedAndroidSpeechRecognizer.kt  # Android STT wrapper
-├── network/UhWebSocketServer.kt   # WebSocket server + protocol
+├── network/EchoWireWebSocketServer.kt   # WebSocket server + protocol
 ├── network/MdnsAdvertiser.kt      # mDNS service advertisement
-├── config/UhConfig.kt            # Static config
+├── config/EchoWireConfig.kt      # Static config
 ├── config/RuntimeConfig.kt       # Runtime config (WebSocket commands)
 ├── ui/MainActivity.kt            # Main UI
 ├── ui/WaveformView.kt            # Audio waveform visualization

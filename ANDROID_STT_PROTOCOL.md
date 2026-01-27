@@ -13,7 +13,7 @@ Upon WebSocket connection, the server immediately sends a `hello` message for de
 ```json
 {
   "type": "hello",
-  "device_name": "UH Service",
+  "device_name": "EchoWire Service",
   "protocol_version": 1,
   "timestamp": 1736707200000
 }
@@ -250,7 +250,7 @@ The server tracks the last partial result and sends only new words:
 ```javascript
 const ws = new WebSocket('ws://192.168.1.100:8080');
 
-const EXPECTED_DEVICE = 'UH Service';
+const EXPECTED_DEVICE = 'EchoWire Service';
 let authenticated = false;
 let currentText = '';  // Accumulate partial results
 
