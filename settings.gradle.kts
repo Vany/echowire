@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "UH"
+rootProject.name = "EchoWire"
 include(":app")

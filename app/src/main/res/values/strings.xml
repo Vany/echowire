@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <resources>
-    <string name="app_name">UH</string>
-    <string name="service_notification_title">UH Service Running</string>
+    <string name="app_name">EchoWire</string>
+    <string name="service_notification_title">EchoWire Service Running</string>
     <string
         name="service_notification_text"
     >WebSocket server active on port %1$d</string>
-    <string name="default_service_name">UH Service</string>
+    <string name="default_service_name">EchoWire Service</string>
     <string name="connected_indicator">Connected: %1$d clients</string>
     <string name="not_connected">Not Connected</string>
     <string name="log_title">Event Log</string>
