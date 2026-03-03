@@ -5,7 +5,7 @@
 
 ## Problem
 
-The Whisper tiny multilingual model can detect and transcribe 99 languages automatically. However, the UH application is designed for **Russian and English only**. Without filtering, the model may:
+The Whisper tiny multilingual model can detect and transcribe 99 languages automatically. However, the EchoWire application is designed for **Russian and English only**. Without filtering, the model may:
 
 - Detect incorrect languages (French, German, etc.)
 - Produce transcriptions in unwanted languages
@@ -14,7 +14,7 @@ The Whisper tiny multilingual model can detect and transcribe 99 languages autom
 
 ## Solution: Language Filtering in SpeechRecognitionManager
 
-**Location:** `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt` (line 253)
+**Location:** `app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt` (line 253)
 
 **Implementation:**
 ```kotlin
@@ -146,8 +146,8 @@ Resolves: "recognizes something, but always wrong" issue
 
 ## Related Files
 
-- `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt` - Filter implementation
-- `app/src/main/java/com/uh/ml/WhisperTokenizer.kt` - Language token constants
+- `app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt` - Filter implementation
+- `app/src/main/java/com/echowire/ml/WhisperTokenizer.kt` - Language token constants
 - `SPEC.md` - Languages section (update to reflect filtering)
 - `CLAUDE.md` - This solution documented
 

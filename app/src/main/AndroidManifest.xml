@@ -31,7 +31,7 @@
         </activity>
 
         <service
-            android:name=".service.UhService"
+            android:name=".service.EchoWireService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="microphone"

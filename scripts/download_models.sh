@@ -1,5 +1,5 @@
 #!/bin/bash
-# Download ML models for UH speech recognition app
+# Download ML models for EchoWire speech recognition app
 
 set -e
 

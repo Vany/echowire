@@ -71,14 +71,14 @@ cd whisper_android
 
 # Copy their working model
 cp models_and_scripts/generated_model/whisper-tiny-encoder.tflite \\
-   /path/to/uh/app/src/main/assets/models/
+   /path/to/echowire/app/src/main/assets/models/
 
 cp models_and_scripts/generated_model/whisper-tiny-decoder.tflite \\
-   /path/to/uh/app/src/main/assets/models/
+   /path/to/echowire/app/src/main/assets/models/
 
 # Copy their vocabulary (BINARY format)
 cp whisper_java/app/src/main/assets/filters_vocab_multilingual.bin \\
-   /path/to/uh/app/src/main/assets/models/
+   /path/to/echowire/app/src/main/assets/models/
 ```
 
 **WARNING:** This model is split into encoder + decoder! You'll need to update your inference code.
@@ -87,7 +87,7 @@ cp whisper_java/app/src/main/assets/filters_vocab_multilingual.bin \\
 
 Keep your current `whisper_tiny.tflite` but fix the output handling:
 
-**File:** `app/src/main/java/com/uh/ml/WhisperModel.kt`
+**File:** `app/src/main/java/com/echowire/ml/WhisperModel.kt`
 
 ```kotlin
 fun runInference(melSpectrogram: Array<FloatArray>): IntArray {

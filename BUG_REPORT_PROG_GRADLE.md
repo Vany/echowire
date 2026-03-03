@@ -31,6 +31,6 @@ prog:shell("./gradlew assembleDebug")
 
 ## Reproduction
 ```
-prog:gradle(["assembleDebug"], project="uh")
+prog:gradle(["assembleDebug"], project="echowire")
 # Shows "Welcome to Gradle 9.2.1!" instead of 8.2
 ```

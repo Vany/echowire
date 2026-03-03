@@ -1,11 +1,11 @@
-package com.uh.config
+package com.echowire.config
 
 /**
- * Configuration for UH service.
+ * Configuration for EchoWire service.
  * Immutable data class holding all service parameters.
  * Future: expose via UI, load from preferences/file.
  */
-data class UhConfig(
+data class EchoWireConfig(
     val mdnsServiceType: String = "_echowire._tcp.",
     val mdnsServiceName: String = "EchoWire_Service",
     val websocketStartPort: Int = 8080,
@@ -18,6 +18,6 @@ data class UhConfig(
          * Default configuration instance.
          * Used when no custom configuration is provided.
          */
-        val DEFAULT = UhConfig()
+        val DEFAULT = EchoWireConfig()
     }
 }

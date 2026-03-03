@@ -45,10 +45,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ### Verify Installation
 ```bash
 # Check if app is installed
-adb shell pm list packages | grep com.uh
+adb shell pm list packages | grep com.echowire
 ```
 
-Expected output: `package:com.uh`
+Expected output: `package:com.echowire`
 
 ## Testing Checklist
 
@@ -102,7 +102,7 @@ cargo run --release
 
 **Expected CLI output:**
 ```
-UH CLI - WebSocket Client
+EchoWire CLI - WebSocket Client
 =========================
 
 Discovering services (5s timeout)...
@@ -142,7 +142,7 @@ make logs | grep RTF
 **Memory Target:** <2GB
 ```bash
 # Check memory usage
-adb shell dumpsys meminfo com.uh
+adb shell dumpsys meminfo com.echowire
 
 # Look for "TOTAL PSS:" should be < 2000000 (2GB)
 ```
@@ -196,7 +196,7 @@ grep -i "error\|crash\|exception" test_logs.txt
 # Should be minimal/none
 
 # Check memory hasn't grown significantly
-adb shell dumpsys meminfo com.uh
+adb shell dumpsys meminfo com.echowire
 ```
 
 ## Common Issues & Solutions
@@ -248,7 +248,7 @@ make install
 **Error:** "Microphone permission denied"
 
 **Solution:**
-- Go to Settings → Apps → UH → Permissions
+- Go to Settings → Apps → EchoWire → Permissions
 - Grant Microphone permission
 - Restart app
 
@@ -258,7 +258,7 @@ make install
 **Solution:**
 ```bash
 # Check service is running
-adb shell ps | grep com.uh
+adb shell ps | grep com.echowire
 
 # Check WebSocket port
 make logs | grep "WebSocket server started"

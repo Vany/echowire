@@ -4,7 +4,7 @@
 
 ### Phase 5: Text Embedding Generation ✅
 
-**EmbeddingManager** (`app/src/main/java/com/uh/ml/EmbeddingManager.kt`):
+**EmbeddingManager** (`app/src/main/java/com/echowire/ml/EmbeddingManager.kt`):
 - ONNX Runtime integration with all-MiniLM-L6-v2 model (86MB)
 - 384-dimensional L2-normalized embeddings for semantic similarity
 - Simple word-level tokenization (TODO: upgrade to WordPiece)
@@ -112,21 +112,21 @@ CLI Client (display with formatting)
 ```bash
 $ uhcli
 
-UH CLI - WebSocket Client
+EchoWire CLI - WebSocket Client
 =========================
 
 Discovering services (5s timeout)...
 
-  Found: UH_Service._uh._tcp.local. at hostname:8080
+  Found: EchoWire_Service._echowire._tcp.local. at hostname:8080
 
 Discovered 1 service(s):
 
-  [1] UH_Service._uh._tcp.local.
+  [1] EchoWire_Service._echowire._tcp.local.
       Host: hostname
       Port: 8080
       Addresses: [192.168.1.100]
 
-Randomly selected: UH_Service._uh._tcp.local.
+Randomly selected: EchoWire_Service._echowire._tcp.local.
 
 Connecting to ws://192.168.1.100:8080/...
 Connected!
@@ -200,7 +200,7 @@ Receiving messages (Ctrl+C to stop):
 
 ### Build Android App
 ```bash
-cd /path/to/uh
+cd /path/to/echowire
 make clean
 make build
 make install
@@ -208,7 +208,7 @@ make install
 
 ### Build CLI Client
 ```bash
-cd /path/to/uh/cli
+cd /path/to/echowire/cli
 cargo build --release
 ```
 
@@ -254,11 +254,11 @@ adb logcat -s UhService:* AudioCaptureManager:* WhisperModel:* EmbeddingManager:
 ## Files Modified/Created (Phase 5 & 6)
 
 ### Created:
-- `app/src/main/java/com/uh/ml/EmbeddingManager.kt` (388 lines)
+- `app/src/main/java/com/echowire/ml/EmbeddingManager.kt` (388 lines)
 
 ### Modified:
-- `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt` (added embedding integration)
-- `app/src/main/java/com/uh/UhService.kt` (added broadcasting methods)
+- `app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt` (added embedding integration)
+- `app/src/main/java/com/echowire/service/EchoWireService.kt` (added broadcasting methods)
 - `cli/src/main.rs` (added message types and handlers)
 - `TODO.md` (marked phases complete)
 - `CLAUDE.md` (documented implementation)

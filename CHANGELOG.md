@@ -20,7 +20,7 @@ Project renamed from "UH" to "EchoWire".
 - **Session metadata** - Detailed timing info (session duration, speech duration)
 - **Error filtering** - Suppress "No speech match" errors (normal silence)
 - **Auto-restart on errors** - Automatic recovery from recognition failures
-- **mDNS service advertisement** - `_uh._tcp.local.` for device discovery
+- **mDNS service advertisement** - `_echowire._tcp.local.` for device discovery
 - **Runtime configuration** - WebSocket commands for dynamic config changes
 - **Enhanced UI** - Language selection buttons, improved state feedback
 
@@ -44,7 +44,7 @@ Project renamed from "UH" to "EchoWire".
 - **Auto language detection** - Manual selection only (EN/RU)
 
 ### Fixed
-- **Race condition** - UhService.startListening() NPE crash
+- **Race condition** - EchoWireService.startListening() NPE crash
 - **Wake lock leak** - Release lock on acquire() failure
 - **Multicast lock leak** - Cleanup on mDNS registration error
 - **Audio level spam** - Throttled to 20 Hz (was 100 Hz)

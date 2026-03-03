@@ -1,0 +1,23 @@
+# Core PyTorch (torchaudio <2.9 for SpeechBrain compatibility)
+torch>=2.1.0,<2.9.0
+torchaudio>=2.1.0,<2.9.0
+
+# Silero VAD
+silero-vad>=5.1
+
+# SpeechBrain for speaker embeddings and emotion
+speechbrain>=1.0.0
+huggingface_hub<1.0.0
+transformers
+
+# Clustering
+scikit-learn>=1.3.0
+
+# Audio I/O
+soundfile
+
+# HTTP
+requests
+
+# Numerics
+numpy>=1.24.0

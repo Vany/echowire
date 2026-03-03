@@ -10,9 +10,9 @@ export ANDROID_HOME := $(HOME)/Library/Android/sdk
 
 GRADLE := ./gradlew
 APK_PATH := app/build/outputs/apk/debug/app-debug.apk
-PACKAGE := com.uh
+PACKAGE := com.echowire
 CLI_DIR := cli
-CLI_BINARY := $(CLI_DIR)/target/release/uhcli
+CLI_BINARY := $(CLI_DIR)/target/release/echowirecli
 
 help:
 	@echo "EchoWire Android App - Makefile Targets"
@@ -32,8 +32,8 @@ help:
 	@echo "  stop-service  - Stop EchoWire service on device"
 	@echo ""
 	@echo "CLI Client (Rust):"
-	@echo "  cli-build     - Build uhcli (release mode)"
-	@echo "  cli-run       - Build and run uhcli"
+	@echo "  cli-build     - Build echowirecli (release mode)"
+	@echo "  cli-run       - Build and run echowirecli"
 	@echo "  cli-clean     - Clean CLI build artifacts"
 
 models:
@@ -67,28 +67,28 @@ uninstall:
 
 logs:
 	@echo "Starting logcat (filtered for EchoWire)..."
-	adb logcat -s UhService:* UhWebSocketServer:* MainActivity:* | grep -E "(UhService|UhWebSocketServer|MainActivity|$(PACKAGE))"
+	adb logcat -s EchoWireService:* EchoWireWebSocketServer:* MainActivity:* | grep -E "(EchoWireService|EchoWireWebSocketServer|MainActivity|$(PACKAGE))"
 
 logs-all:
 	@echo "Starting logcat (all Android runtime errors)..."
-	adb logcat -s UhService:* UhWebSocketServer:* MainActivity:* AndroidRuntime:E
+	adb logcat -s EchoWireService:* EchoWireWebSocketServer:* MainActivity:* AndroidRuntime:E
 
 retrieve-logs:
 	@echo "Retrieving last logs from device..."
 	@mkdir -p logs
 	@TIMESTAMP=$$(date +%Y%m%d_%H%M%S); \
 	LOGFILE="logs/echowire_logs_$$TIMESTAMP.txt"; \
-	adb logcat -d -s UhService:* UhWebSocketServer:* MainActivity:* | grep -E "(UhService|UhWebSocketServer|MainActivity|$(PACKAGE))" > $$LOGFILE; \
+	adb logcat -d -s EchoWireService:* EchoWireWebSocketServer:* MainActivity:* | grep -E "(EchoWireService|EchoWireWebSocketServer|MainActivity|$(PACKAGE))" > $$LOGFILE; \
 	echo "Logs saved to: $$LOGFILE"; \
 	echo "Total lines: $$(wc -l < $$LOGFILE | tr -d ' ')"
 
 start-service:
 	@echo "Starting EchoWire service..."
-	adb shell am start-foreground-service -n $(PACKAGE)/.UhService
+	adb shell am start-foreground-service -n $(PACKAGE)/.service.EchoWireService
 
 stop-service:
 	@echo "Stopping EchoWire service..."
-	adb shell am stopservice $(PACKAGE)/.UhService
+	adb shell am stopservice $(PACKAGE)/.service.EchoWireService
 
 # CLI Client targets
 

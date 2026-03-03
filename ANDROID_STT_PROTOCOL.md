@@ -171,7 +171,7 @@ Backward compatibility message removed as it's redundant.
 Typical recognition session (clean, minimal):
 
 ```
-[connect]   hello: device_name="UH Service", protocol_version=1
+[connect]   hello: device_name="EchoWire Service", protocol_version=1
 [T+800ms]   partial_result: "hello"
 [T+1500ms]  partial_result: "world"    (only new word)
 [T+2200ms]  final_result: "hello world" (confidence: 0.95)

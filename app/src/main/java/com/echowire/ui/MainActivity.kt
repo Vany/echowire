@@ -1,4 +1,4 @@
-package com.uh.ui
+package com.echowire.ui
 
 import android.Manifest
 import android.content.ComponentName
@@ -12,8 +12,8 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.uh.R
-import com.uh.service.UhService
+import com.echowire.R
+import com.echowire.service.EchoWireService
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.text.SimpleDateFormat
@@ -23,7 +23,7 @@ import java.util.Locale
 /**
  * Main activity: service control, real-time status, event log.
  */
-class MainActivity : AppCompatActivity(), UhService.ServiceListener {
+class MainActivity : AppCompatActivity(), EchoWireService.ServiceListener {
 
     companion object {
         private const val MAX_LOG_LINES = 100
@@ -43,7 +43,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     private var currentLanguage = "en-US"
 
-    private var uhService: UhService? = null
+    private var echoWireService: EchoWireService? = null
     private var serviceBound = false
 
     private val logLines = mutableListOf<String>()
@@ -51,21 +51,21 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, service: IBinder) {
-            val binder = service as UhService.LocalBinder
-            uhService = binder.getService()
-            uhService?.setListener(this@MainActivity)
+            val binder = service as EchoWireService.LocalBinder
+            echoWireService = binder.getService()
+            echoWireService?.setListener(this@MainActivity)
             serviceBound = true
 
             runOnUiThread {
-                updateConnectionIndicator(uhService?.getClientCount() ?: 0)
-                updateButtons(uhService?.isServiceRunning() ?: false)
-                nameTextView.text = uhService?.getConfigValue("name") ?: "EchoWire Service"
+                updateConnectionIndicator(echoWireService?.getClientCount() ?: 0)
+                updateButtons(echoWireService?.isServiceRunning() ?: false)
+                nameTextView.text = echoWireService?.getConfigValue("name") ?: "EchoWire Service"
 
                 // Sync language with service
-                currentLanguage = uhService?.getCurrentLanguage() ?: "en-US"
+                currentLanguage = echoWireService?.getCurrentLanguage() ?: "en-US"
                 updateLanguageButtons()
 
-                val port = uhService?.getServerPort() ?: 0
+                val port = echoWireService?.getServerPort() ?: 0
                 if (port > 0) {
                     updateIpAddress(port)
                     addLog("Service bound - port $port")
@@ -74,8 +74,8 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
-            uhService?.setListener(null)
-            uhService = null
+            echoWireService?.setListener(null)
+            echoWireService = null
             serviceBound = false
             runOnUiThread {
                 updateConnectionIndicator(0)
@@ -115,7 +115,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
         currentLanguage = languageCode
         updateLanguageButtons()
 
-        uhService?.let { service ->
+        echoWireService?.let { service ->
             // Send language change command to service via RuntimeConfig
             val command = "{\"command\":\"set_config\",\"key\":\"language\",\"value\":\"$languageCode\"}"
             addLog("Setting language to $languageCode")
@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private fun changeServiceLanguage(languageCode: String) {
-        uhService?.setLanguage(languageCode)
+        echoWireService?.setLanguage(languageCode)
     }
 
     private fun updateLanguageButtons() {
@@ -151,13 +151,13 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
 
     override fun onStart() {
         super.onStart()
-        bindService(Intent(this, UhService::class.java), serviceConnection, 0)
+        bindService(Intent(this, EchoWireService::class.java), serviceConnection, 0)
     }
 
     override fun onStop() {
         super.onStop()
         if (serviceBound) {
-            uhService?.setListener(null)
+            echoWireService?.setListener(null)
             unbindService(serviceConnection)
             serviceBound = false
         }
@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private fun startServiceInternal() {
-        val intent = Intent(this, UhService::class.java)
+        val intent = Intent(this, EchoWireService::class.java)
         ContextCompat.startForegroundService(this, intent)
         bindService(intent, serviceConnection, 0)
         addLog("Starting service...")
@@ -196,9 +196,9 @@ class MainActivity : AppCompatActivity(), UhService.ServiceListener {
     }
 
     private fun stopService() {
-        stopService(Intent(this, UhService::class.java))
+        stopService(Intent(this, EchoWireService::class.java))
         if (serviceBound) {
-            uhService?.setListener(null)
+            echoWireService?.setListener(null)
             unbindService(serviceConnection)
             serviceBound = false
         }

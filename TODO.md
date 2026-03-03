@@ -1,4 +1,4 @@
-# TODO - UH Speech Recognition App
+# TODO - EchoWire Speech Recognition App
 
 ## ✅ COMPLETED PHASES
 
@@ -222,7 +222,7 @@ val inference = WhisperInferenceFactory.create(
 
 #### Performance Profiling
 - [ ] CPU usage monitoring (`adb shell top`)
-- [ ] Memory usage analysis (`adb shell dumpsys meminfo com.uh`)
+- [ ] Memory usage analysis (`adb shell dumpsys meminfo com.echowire`)
 - [ ] Battery drain measurement (line power assumed, but still check)
 - [ ] Network bandwidth (WebSocket message size)
 - [ ] Audio capture latency breakdown
@@ -428,7 +428,7 @@ val inference = WhisperInferenceFactory.create(
 
 **Final Package Structure:**
 ```
-com.uh/
+com.echowire/
 ├── audio/          ✅ (no changes - already good)
 ├── ml/             ✅ (cleanup complete)
 ├── network/        ✅ (UhWebSocketServer + MdnsAdvertiser)
@@ -510,10 +510,10 @@ cd cli && cargo build --release
 ### Performance Monitoring Commands
 ```bash
 # Memory usage
-adb shell dumpsys meminfo com.uh
+adb shell dumpsys meminfo com.echowire
 
 # CPU usage
-adb shell top -m 10 | grep com.uh
+adb shell top -m 10 | grep com.echowire
 
 # Network traffic
 adb shell tcpdump -i wlan0 port 8080

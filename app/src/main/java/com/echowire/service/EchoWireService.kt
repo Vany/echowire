@@ -1,4 +1,4 @@
-package com.uh.service
+package com.echowire.service
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -14,13 +14,13 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.uh.R
-import com.uh.config.RuntimeConfig
-import com.uh.config.UhConfig
-import com.uh.ml.EnhancedAndroidSpeechRecognizer
-import com.uh.network.MdnsAdvertiser
-import com.uh.network.UhWebSocketServer
-import com.uh.ui.MainActivity
+import com.echowire.R
+import com.echowire.config.RuntimeConfig
+import com.echowire.config.EchoWireConfig
+import com.echowire.ml.EnhancedAndroidSpeechRecognizer
+import com.echowire.network.MdnsAdvertiser
+import com.echowire.network.EchoWireWebSocketServer
+import com.echowire.ui.MainActivity
 import java.net.ServerSocket
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -30,10 +30,10 @@ import java.util.concurrent.TimeUnit
  * Foreground service: Android STT → WebSocket broadcast.
  * No ML models, no embeddings. Pure platform speech recognition, streamed as fast as possible.
  */
-class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventListener {
+class EchoWireService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventListener {
 
     companion object {
-        private const val TAG = "UhService"
+        private const val TAG = "EchoWireService"
         private const val NOTIFICATION_CHANNEL_ID = "echowire_service_channel"
         private const val NOTIFICATION_ID = 1
         private const val AUDIO_LEVEL_THROTTLE_MS = 30L  // ~33 Hz max
@@ -57,7 +57,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private var listener: ServiceListener? = null
 
     // Config
-    private val config: UhConfig = UhConfig.DEFAULT
+    private val config: EchoWireConfig = EchoWireConfig.DEFAULT
     private val runtimeConfig = RuntimeConfig()
 
     // Speech recognition
@@ -73,7 +73,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private var sentWords = mutableSetOf<String>()  // Track all sent words in this session
 
     // Network
-    private var webSocketServer: UhWebSocketServer? = null
+    private var webSocketServer: EchoWireWebSocketServer? = null
     private var serverPort: Int = 0
     private var mdnsAdvertiser: MdnsAdvertiser? = null
 
@@ -84,7 +84,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private var isRunning = false
 
     inner class LocalBinder : Binder() {
-        fun getService(): UhService = this@UhService
+        fun getService(): EchoWireService = this@EchoWireService
     }
 
     override fun onBind(intent: Intent): IBinder = binder
@@ -189,7 +189,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private fun startWebSocketServer() {
         try {
             serverPort = findAvailablePort(config.websocketStartPort, config.websocketMaxPortSearch)
-            webSocketServer = UhWebSocketServer(
+            webSocketServer = EchoWireWebSocketServer(
                 port = serverPort,
                 runtimeConfig = runtimeConfig,
                 onClientConnect = { addr ->
@@ -257,7 +257,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
             val lock = pm.newWakeLock(
                 PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
-                "UhService::WakeLock"
+                "EchoWireService::WakeLock"
             )
             lock.acquire()
             wakeLock = lock
@@ -296,7 +296,7 @@ class UhService : Service(), EnhancedAndroidSpeechRecognizer.RecognitionEventLis
     private fun initializeSpeechRecognition() {
         try {
             speechRecognizer = EnhancedAndroidSpeechRecognizer(this, currentLanguage).apply {
-                setListener(this@UhService)
+                setListener(this@EchoWireService)
                 if (!initialize()) {
                     throw IllegalStateException("Speech recognition not available on this device")
                 }

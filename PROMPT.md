@@ -28,7 +28,7 @@ use only english language and math in memory.
 Use git commits to document project history and decisions
 Place tests in dedicated tests/ folder, never inline with source code
 
-project=uh
+project=echowire
 never run the service pls, ask me to test it.
 This service is your prog: MCP tools. You can fix it.
 NEVER  use  legacy tools under any circumstances: bash_tool, str_replace, view, create_file

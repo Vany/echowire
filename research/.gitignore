@@ -1,0 +1,27 @@
+# Virtual environment
+.venv/
+
+# Downloaded models
+models/
+
+# HuggingFace checkpoints (large binaries)
+*_checkpoints/
+
+# Audio samples
+corpse/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

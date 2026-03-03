@@ -8,7 +8,7 @@
 I WhisperTokenizer: Loaded 51865 tokens from vocabulary
 D WhisperTokenizer: Vocabulary size: 51865
 D WhisperTokenizer: Cleaned text: " I'm going to say it"
-I UhService: Transcription: "I'm going to say it"
+I EchoWireService: Transcription: "I'm going to say it"
 ```
 
 ## The Bug Hunt Journey
@@ -188,13 +188,13 @@ extractModels()  // Always verify and fix files
 ## Files Modified (Final State)
 
 ### Core ML Components
-- `app/src/main/java/com/uh/ml/WhisperModel.kt` - ByteBuffer fix
-- `app/src/main/java/com/uh/ml/WhisperTokenizer.kt` - Iterator fix
-- `app/src/main/java/com/uh/ml/ModelManager.kt` - Size verification
-- `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt` - Integration
+- `app/src/main/java/com/echowire/ml/WhisperModel.kt` - ByteBuffer fix
+- `app/src/main/java/com/echowire/ml/WhisperTokenizer.kt` - Iterator fix
+- `app/src/main/java/com/echowire/ml/ModelManager.kt` - Size verification
+- `app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt` - Integration
 
 ### Service Layer
-- `app/src/main/java/com/uh/UhService.kt` - Always extract
+- `app/src/main/java/com/echowire/service/EchoWireService.kt` - Always extract
 
 ### Assets
 - `app/src/main/assets/models/whisper_vocab.json` - 1.1MB, 51,865 tokens

@@ -1,8 +1,8 @@
-# UH - Requirements Specification
+# EchoWire - Requirements Specification
 
 ## Product Overview
 
-**UH** is an Android application that performs continuous speech recognition and streams results over WebSocket to multiple clients. Designed for local network use with mDNS discovery.
+**EchoWire** is an Android application that performs continuous speech recognition and streams results over WebSocket to multiple clients. Designed for local network use with mDNS discovery.
 
 **Primary Use Case**: Real-time speech-to-text streaming for integration with other applications, automation systems, or voice-controlled interfaces.
 
@@ -47,14 +47,14 @@
 ```json
 {
   "type": "hello",
-  "device_name": "UH Service",
+  "device_name": "EchoWire Service",
   "protocol_version": 1,
   "timestamp": 1736707200000
 }
 ```
 
 #### FR-2.3: mDNS Service Advertisement
-- Advertise service as `_uh._tcp.local.`
+- Advertise service as `_echowire._tcp.local.`
 - Include WebSocket port in service info
 - Configurable service name
 
@@ -149,7 +149,7 @@
 #### FR-4.3: Configuration Variables
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
-| `name` | string | "UH Service" | Service display name |
+| `name` | string | "EchoWire Service" | Service display name |
 | `language` | string | "en-US" | Recognition language code |
 
 ### FR-5: User Interface

@@ -1,6 +1,6 @@
 # Models Directory
 
-This directory contains ML models for the UH speech recognition service.
+This directory contains ML models for the EchoWire speech recognition service.
 Models are **not committed to git** due to large file sizes.
 
 ## Structure

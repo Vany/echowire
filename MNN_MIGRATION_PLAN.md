@@ -58,15 +58,15 @@ cd /path/to/MNN
 # Basic conversion
 ./build/MNNConvert \
   -f TFLITE \
-  --modelFile /path/to/uh/app/src/main/assets/models/whisper_tiny.tflite \
-  --MNNModel /path/to/uh/app/src/main/assets/models/whisper_tiny.mnn \
+  --modelFile /path/to/echowire/app/src/main/assets/models/whisper_tiny.tflite \
+  --MNNModel /path/to/echowire/app/src/main/assets/models/whisper_tiny.mnn \
   --bizCode biz
 
 # With FP16 optimization (recommended for GPU, reduces size ~50%)
 ./build/MNNConvert \
   -f TFLITE \
-  --modelFile /path/to/uh/app/src/main/assets/models/whisper_tiny.tflite \
-  --MNNModel /path/to/uh/app/src/main/assets/models/whisper_tiny_fp16.mnn \
+  --modelFile /path/to/echowire/app/src/main/assets/models/whisper_tiny.tflite \
+  --MNNModel /path/to/echowire/app/src/main/assets/models/whisper_tiny_fp16.mnn \
   --bizCode biz \
   --fp16
 
@@ -169,10 +169,10 @@ mv MNN-Android-2.9.0.aar app/libs/mnn-release.aar
 
 ### 3.2 Create MNN Whisper Model Class
 
-**Location:** `app/src/main/java/com/uh/ml/MnnWhisperModel.kt`
+**Location:** `app/src/main/java/com/echowire/ml/MnnWhisperModel.kt`
 
 ```kotlin
-package com.uh.ml
+package com.echowire.ml
 
 import android.content.Context
 import android.util.Log
@@ -380,7 +380,7 @@ class MnnWhisperModel(
 
 ### 3.3 Update SpeechRecognitionManager
 
-**Location:** `app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt`
+**Location:** `app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt`
 
 **Replace WhisperModel with MnnWhisperModel:**
 
@@ -406,7 +406,7 @@ class SpeechRecognitionManager(
 
 ### 3.4 Update UhService Model Paths
 
-**Location:** `app/src/main/java/com/uh/UhService.kt`
+**Location:** `app/src/main/java/com/echowire/service/EchoWireService.kt`
 
 **Change model file extension:**
 
@@ -442,7 +442,7 @@ private fun loadModels() {
 
 ### 3.5 Update ModelManager for .mnn Files
 
-**Location:** `app/src/main/java/com/uh/ModelManager.kt`
+**Location:** `app/src/main/java/com/echowire/ml/ModelManager.kt`
 
 **Add .mnn file handling:**
 
@@ -463,10 +463,10 @@ class ModelManager private constructor(private val context: Context) {
 
 ### 4.1 Unit Tests
 
-**Create test:** `app/src/test/java/com/uh/ml/MnnWhisperModelTest.kt`
+**Create test:** `app/src/test/java/com/echowire/ml/MnnWhisperModelTest.kt`
 
 ```kotlin
-package com.uh.ml
+package com.echowire.ml
 
 import org.junit.Test
 import org.junit.Assert.*
@@ -611,11 +611,11 @@ git add app/src/main/assets/models/whisper_tiny.mnn
 git commit -m "Add MNN Whisper model (FP16, 33MB)"
 
 # Implement MNN integration
-git add app/src/main/java/com/uh/ml/MnnWhisperModel.kt
+git add app/src/main/java/com/echowire/ml/MnnWhisperModel.kt
 git commit -m "Implement MNN Whisper model with Mali GPU support"
 
 # Update integration
-git add app/src/main/java/com/uh/ml/SpeechRecognitionManager.kt
+git add app/src/main/java/com/echowire/ml/SpeechRecognitionManager.kt
 git commit -m "Migrate SpeechRecognitionManager to MNN"
 
 # Test and benchmark

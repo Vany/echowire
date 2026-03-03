@@ -1,8 +1,8 @@
-# UH - Research & Development Knowledge Base
+# EchoWire - Research & Development Knowledge Base
 
 ## Overview
 
-This document captures research findings, technical decisions, and lessons learned during development of the UH speech recognition service.
+This document captures research findings, technical decisions, and lessons learned during development of the EchoWire speech recognition service.
 
 ---
 
@@ -268,7 +268,7 @@ fun findAvailablePort(startPort: Int = 8080): Int {
 ### Android NsdManager (Primary)
 ```kotlin
 val serviceInfo = NsdServiceInfo().apply {
-    serviceName = "UH Service"
+    serviceName = "EchoWire Service"
     serviceType = "_uh._tcp"
     port = serverPort
 }
@@ -283,7 +283,7 @@ nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, listener)
 ### jmDNS Library (Fallback)
 ```kotlin
 val jmdns = JmDNS.create(InetAddress.getLocalHost())
-val serviceInfo = ServiceInfo.create("_uh._tcp.local.", "UH Service", port, "")
+val serviceInfo = ServiceInfo.create("_echowire._tcp.local.", "EchoWire Service", port, "")
 jmdns.registerService(serviceInfo)
 ```
 
@@ -318,7 +318,7 @@ multicastLock.release()
 ```kotlin
 val channel = NotificationChannel(
     CHANNEL_ID,
-    "UH Service",
+    "EchoWire Service",
     NotificationManager.IMPORTANCE_LOW
 )
 notificationManager.createNotificationChannel(channel)
@@ -329,7 +329,7 @@ notificationManager.createNotificationChannel(channel)
 val powerManager = getSystemService(POWER_SERVICE) as PowerManager
 wakeLock = powerManager.newWakeLock(
     PowerManager.PARTIAL_WAKE_LOCK,
-    "uh:service"
+    "echowire:service"
 )
 wakeLock.acquire()
 ```
@@ -432,14 +432,14 @@ WebSocket Thread: Library-managed
 
 ### Log Monitoring
 ```bash
-# UH app logs only
+# EchoWire app logs only
 adb logcat -s UhService:* SpeechRecognizer:* WebSocket:*
 
 # All speech-related
 adb logcat | grep -i "speech\|recogni\|audio"
 
 # Memory usage
-adb shell dumpsys meminfo com.uh
+adb shell dumpsys meminfo com.echowire
 ```
 
 ---

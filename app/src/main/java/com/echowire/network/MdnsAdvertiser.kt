@@ -1,4 +1,4 @@
-package com.uh.network
+package com.echowire.network
 
 import android.content.Context
 import android.net.nsd.NsdManager

@@ -1,4 +1,4 @@
-package com.uh.config
+package com.echowire.config
 
 import android.util.Log
 import org.json.JSONObject

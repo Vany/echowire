@@ -255,6 +255,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "echowirecli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "futures-util",
+ "mdns-sd",
+ "rand",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "url",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -991,23 +1008,6 @@ name = "typenum"
 version = "1.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "562d481066bde0658276a35467c4af00bdc6ee726305698a55b86e61d7ad82bb"
-
-[[package]]
-name = "uhcli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "chrono",
- "clap",
- "futures-util",
- "mdns-sd",
- "rand",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "url",
-]
 
 [[package]]
 name = "unicode-ident"

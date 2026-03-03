@@ -1,4 +1,4 @@
-package com.uh.ml
+package com.echowire.ml
 
 import android.content.Context
 import android.content.Intent
@@ -205,8 +205,10 @@ class EnhancedAndroidSpeechRecognizer(
                                 Log.d(TAG, "Result #$index: \"$text\" (confidence: ${"%.3f".format(confidence)})")
                             }
 
-                            Log.i(TAG, "Final result: \"${matches[0]}\" " +
-                                    "(session: ${sessionDuration}ms, speech: ${speechDuration}ms)")
+                            Log.i(
+                                TAG, "Final result: \"${matches[0]}\" " +
+                                        "(session: ${sessionDuration}ms, speech: ${speechDuration}ms)"
+                            )
 
                             listener?.onFinalResult(
                                 results = matches,

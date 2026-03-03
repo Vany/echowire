@@ -10,7 +10,9 @@ use tokio::time::timeout;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use url::Url;
 
+const USE_IPV4_ONLY: bool = true;
 const SERVICE_TYPE: &str = "_echowire._tcp.local.";
+
 const DISCOVERY_TIMEOUT_SECS: u64 = 5;
 const CONFIG_RESPONSE_TIMEOUT_SECS: u64 = 3;
 
@@ -68,7 +70,7 @@ struct ConfigureResponse {
 }
 
 #[derive(Parser)]
-#[command(name = "uhcli")]
+#[command(name = "echowirecli")]
 #[command(about = "EchoWire WebSocket Client - Control and monitor EchoWire services", long_about = None)]
 struct Cli {
     #[command(subcommand)]
@@ -82,7 +84,7 @@ enum Commands {
 
     /// Set a configuration value on an EchoWire service
     ///
-    /// Example: uhcli set name=MyDevice
+    /// Example: echowirecli set name=MyDevice
     Set {
         /// Configuration key=value pair (e.g., name=MyDevice)
         #[arg(value_parser = parse_key_value)]
@@ -91,7 +93,7 @@ enum Commands {
 
     /// Get a configuration value from an EchoWire service
     ///
-    /// Example: uhcli get name
+    /// Example: echowirecli get name
     Get {
         /// Configuration key to retrieve
         key: String,
@@ -176,6 +178,10 @@ async fn discover_services() -> Result<Vec<EchoWireService>> {
         "Discovering services ({}s timeout)...\n",
         DISCOVERY_TIMEOUT_SECS
     );
+    println!("ℹ️  Looking for service type: {}", SERVICE_TYPE);
+    if USE_IPV4_ONLY {
+        println!("ℹ️  IPv4-only mode enabled\n");
+    }
 
     let mdns = ServiceDaemon::new().context("Failed to create mDNS daemon")?;
     let receiver = mdns
@@ -230,6 +236,18 @@ async fn discover_services() -> Result<Vec<EchoWireService>> {
     Ok(services)
 }
 
+/// Select appropriate IP address based on USE_IPV4_ONLY setting.
+fn select_address(addresses: &[IpAddr]) -> Result<&IpAddr> {
+    if USE_IPV4_ONLY {
+        addresses
+            .iter()
+            .find(|addr| matches!(addr, IpAddr::V4(_)))
+            .context("No IPv4 address found (USE_IPV4_ONLY is enabled)")
+    } else {
+        addresses.first().context("Service has no addresses")
+    }
+}
+
 /// Format IP address for URL (IPv6 needs brackets).
 fn format_address_for_url(addr: &IpAddr) -> String {
     match addr {
@@ -240,21 +258,22 @@ fn format_address_for_url(addr: &IpAddr) -> String {
 
 /// Connect to selected service and listen to broadcast messages.
 async fn listen_to_service(service: &EchoWireService) -> Result<()> {
-    let address = service
-        .addresses
-        .first()
-        .context("Service has no addresses")?;
+    let address = select_address(&service.addresses)?;
 
     let addr_str = format_address_for_url(address);
     let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-    println!("Connecting to {}...", ws_url);
+
+    println!("ℹ️  Connecting to: {}", ws_url);
+    println!("ℹ️  IP Address: {}", address);
+    println!("ℹ️  Port: {}", service.port);
+    println!("ℹ️  Service: {}\n", service.name);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
     let (ws_stream, _) = connect_async(url)
         .await
         .context("Failed to connect to WebSocket server")?;
 
-    println!("Connected!\n");
+    println!("✅ Connected!\n");
     println!("Receiving messages (Ctrl+C to stop):\n");
 
     let (_write, mut read) = ws_stream.split();
@@ -304,21 +323,21 @@ async fn listen_to_service(service: &EchoWireService) -> Result<()> {
 
 /// Send configure message to set a value and display response.
 async fn send_configure_set(service: &EchoWireService, key: &str, value: &str) -> Result<()> {
-    let address = service
-        .addresses
-        .first()
-        .context("Service has no addresses")?;
+    let address = select_address(&service.addresses)?;
 
     let addr_str = format_address_for_url(address);
     let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-    println!("Connecting to {}...", ws_url);
+
+    println!("ℹ️  Connecting to: {}", ws_url);
+    println!("ℹ️  IP Address: {}", address);
+    println!("ℹ️  Port: {}", service.port);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
     let (ws_stream, _) = connect_async(url)
         .await
         .context("Failed to connect to WebSocket server")?;
 
-    println!("Connected!\n");
+    println!("✅ Connected!\n");
 
     let (mut write, mut read) = ws_stream.split();
 
@@ -378,21 +397,21 @@ async fn send_configure_set(service: &EchoWireService, key: &str, value: &str) -
 
 /// Send configure message to get a value and display response.
 async fn send_configure_get(service: &EchoWireService, key: &str) -> Result<()> {
-    let address = service
-        .addresses
-        .first()
-        .context("Service has no addresses")?;
+    let address = select_address(&service.addresses)?;
 
     let addr_str = format_address_for_url(address);
     let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-    println!("Connecting to {}...", ws_url);
+
+    println!("ℹ️  Connecting to: {}", ws_url);
+    println!("ℹ️  IP Address: {}", address);
+    println!("ℹ️  Port: {}", service.port);
 
     let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
     let (ws_stream, _) = connect_async(url)
         .await
         .context("Failed to connect to WebSocket server")?;
 
-    println!("Connected!\n");
+    println!("✅ Connected!\n");
 
     let (mut write, mut read) = ws_stream.split();
 

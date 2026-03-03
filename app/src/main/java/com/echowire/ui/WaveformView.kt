@@ -1,4 +1,4 @@
-package com.uh.ui
+package com.echowire.ui
 
 import android.content.Context
 import android.graphics.Canvas
@@ -135,7 +135,8 @@ class WaveformView @JvmOverloads constructor(
             // Convert sample to Y coordinate (amplitude from center)
             val amplitude = sample * (height / 2f) * 0.9f  // 90% of half-height
             val x = i * stepX
-            val y = centerY - amplitude + (Math.random().toFloat() - 0.5f) * amplitude * 0.2f  // Slight variation for organic look
+            val y = centerY - amplitude + (Math.random()
+                .toFloat() - 0.5f) * amplitude * 0.2f  // Slight variation for organic look
 
             if (firstPoint) {
                 path.moveTo(x, y)

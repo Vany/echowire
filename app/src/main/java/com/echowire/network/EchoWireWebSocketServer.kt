@@ -1,12 +1,13 @@
-package com.uh.network
+package com.echowire.network
 
 import android.util.Log
-import com.uh.config.RuntimeConfig
+import com.echowire.config.RuntimeConfig
 import org.java_websocket.WebSocket
 import org.java_websocket.handshake.ClientHandshake
 import org.java_websocket.server.WebSocketServer
 import org.json.JSONArray
 import org.json.JSONObject
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 
@@ -15,16 +16,16 @@ import java.nio.ByteBuffer
  * Runs on specified port, accepts all connections, broadcasts to all without tracking.
  * Handles configuration messages from clients.
  */
-class UhWebSocketServer(
+class EchoWireWebSocketServer(
     port: Int,
     private val runtimeConfig: RuntimeConfig,
     private val onClientConnect: (String) -> Unit,
     private val onClientDisconnect: (String) -> Unit,
     private val onError: (Exception) -> Unit
-) : WebSocketServer(InetSocketAddress(port)) {
+) : WebSocketServer(InetSocketAddress(InetAddress.getByName("0.0.0.0"), port)) {
 
     companion object {
-        private const val TAG = "UhWebSocketServer"
+        private const val TAG = "EchoWireWebSocketServer"
     }
 
     private val connectedClients = mutableSetOf<WebSocket>()

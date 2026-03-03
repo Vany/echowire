@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.uh"
+    namespace = "com.echowire"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.uh"
+        applicationId = "com.echowire"
         minSdk = 31
         targetSdk = 34
         versionCode = 2

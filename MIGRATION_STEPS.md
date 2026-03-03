@@ -22,10 +22,10 @@ git clone https://github.com/vilassn/whisper_android.git
 cd whisper_android
 
 # Copy model to your project
-cp models_and_scripts/generated_model/whisper-tiny.tflite ~/l/uh/app/src/main/assets/models/
+cp models_and_scripts/generated_model/whisper-tiny.tflite ~/l/echowire/app/src/main/assets/models/
 
 # Verify size
-ls -lh ~/l/uh/app/src/main/assets/models/whisper-tiny.tflite
+ls -lh ~/l/echowire/app/src/main/assets/models/whisper-tiny.tflite
 # Should be ~39-40MB
 ```
 

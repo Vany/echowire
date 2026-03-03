@@ -90,7 +90,7 @@ make logs
 
 **Expected Logs**:
 ```
-WhisperModel: Loading Whisper model from: /data/data/com.uh/files/models/whisper_tiny.tflite
+WhisperModel: Loading Whisper model from: /data/data/com.echowire/files/models/whisper_tiny.tflite
 WhisperModel: Model size: 66 MB
 WhisperModel: Model loaded successfully in XXXXms
 WhisperModel: Input tensor: TensorInfo(shape=[1, 80, 3000], type=FLOAT32)
@@ -258,11 +258,11 @@ git clone https://github.com/vilassn/whisper_android.git
 
 # Copy their models
 cp whisper_android/models_and_scripts/generated_model/whisper-tiny.tflite \\
-   /path/to/uh/models/whisper/
+   /path/to/echowire/models/whisper/
 
 # Copy binary vocabulary
 cp whisper_android/whisper_java/app/src/main/assets/filters_vocab_multilingual.bin \\
-   /path/to/uh/app/src/main/assets/models/
+   /path/to/echowire/app/src/main/assets/models/
 
 # Rebuild and test
 make clean

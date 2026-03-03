@@ -45,7 +45,7 @@
     />
 
     <!-- Waveform Analyzer: Green (idle), Yellow (recognizing), Red (error) -->
-    <com.uh.ui.WaveformView
+    <com.echowire.ui.WaveformView
         android:id="@+id/waveformView"
         android:layout_width="match_parent"
         android:layout_height="120dp"
@@ -54,7 +54,7 @@
     />
 
     <!-- DB Meter: Shows peak volume in last second -->
-    <com.uh.ui.DbMeterView
+    <com.echowire.ui.DbMeterView
         android:id="@+id/dbMeterView"
         android:layout_width="match_parent"
         android:layout_height="80dp"

@@ -10,7 +10,7 @@
 
 ### `hello` - Handshake (sent on connect)
 ```json
-{"type":"hello","device_name":"UH Service","protocol_version":1,"timestamp":1736707200000}
+{"type":"hello","device_name":"EchoWire Service","protocol_version":1,"timestamp":1736707200000}
 ```
 - `device_name`: string - device identity for auth
 - `protocol_version`: int - currently 1
