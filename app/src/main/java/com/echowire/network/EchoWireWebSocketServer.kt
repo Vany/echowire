@@ -204,6 +204,7 @@ class EchoWireWebSocketServer(
         alternatives: List<String>,
         confidenceScores: FloatArray,
         language: String,
+        sentenceType: String? = null,
         sessionStart: Long,
         sessionDurationMs: Long,
         speechStart: Long,
@@ -226,6 +227,9 @@ class EchoWireWebSocketServer(
             // Convenience fields
             put("best_text", alternatives.firstOrNull() ?: "")
             put("best_confidence", confidenceScores.firstOrNull()?.toDouble() ?: 0.0)
+
+            // Sentence type (Percept only — null for Android STT)
+            sentenceType?.let { put("sentence_type", it) }
 
             // Metadata
             put("language", language)

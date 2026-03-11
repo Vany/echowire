@@ -15,9 +15,9 @@ import kotlin.math.max
  * Displays in decibels (dB) with color-coded level indicator.
  *
  * Color Zones:
- * - Green: -60 dB to -20 dB (quiet to normal speech)
- * - Yellow: -20 dB to -6 dB (loud speech)
- * - Red: -6 dB to 0 dB (very loud, near clipping)
+ * - Green: below -20 dB (quiet / normal)
+ * - Yellow: -20 dB to -8 dB (loud)
+ * - Red: -8 dB to 0 dB (very loud / clipping)
  *
  * Peak hold: displays maximum level from last 1 second of samples.
  */
@@ -28,13 +28,13 @@ class DbMeterView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     companion object {
-        private const val PEAK_HOLD_DURATION_MS = 1000  // 1 second peak hold
+        private const val PEAK_HOLD_DURATION_MS = 150   // 150ms peak hold
         private const val DB_MIN = -60f  // Minimum dB to display
         private const val DB_MAX = 0f    // Maximum dB (0 dB = full scale)
 
         // Color thresholds
-        private const val DB_GREEN_MAX = -20f
-        private const val DB_YELLOW_MAX = -6f
+        private const val DB_GREEN_MAX = -20f   // green below this
+        private const val DB_YELLOW_MAX = -8f   // yellow -20..-8, red above
     }
 
     // Peak tracking
@@ -51,12 +51,6 @@ class DbMeterView @JvmOverloads constructor(
 
     private val meterPaint = Paint().apply {
         style = Paint.Style.FILL
-    }
-
-    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.WHITE
-        textSize = 36f
-        textAlign = Paint.Align.CENTER
     }
 
     private val borderPaint = Paint().apply {
@@ -77,33 +71,30 @@ class DbMeterView @JvmOverloads constructor(
     )
 
     /**
-     * Add audio level sample.
-     * @param level Normalized audio level 0.0 (silence) to 1.0 (max)
+     * Add a real dBFS sample directly. Use this from AudioLevelMonitor.
+     * @param db  Real RMS dBFS value, typically in [-60, 0].
+     */
+    fun addDb(db: Float) {
+        recordPeak(db.coerceIn(DB_MIN, DB_MAX))
+    }
+
+    /**
+     * Add a normalized 0..1 level (legacy — converts to dB internally).
+     * @param level  Normalized 0.0 (silence) to 1.0 (max)
      */
     fun addSample(level: Float) {
+        val db = if (level > 0.0001f) 20f * log10(level) else DB_MIN
+        recordPeak(db)
+    }
+
+    private fun recordPeak(db: Float) {
         val timestamp = System.currentTimeMillis()
-
-        // Convert normalized level to dB
-        // RMS to dB: 20 * log10(rms)
-        // Add reference offset: full scale = 0 dB
-        val db = if (level > 0.0001f) {
-            20f * log10(level)
-        } else {
-            DB_MIN  // Below noise floor
-        }
-
         synchronized(peakSamples) {
-            // Add new sample
             peakSamples.add(PeakSample(db, timestamp))
-
-            // Remove samples older than 1 second
-            val cutoffTime = timestamp - PEAK_HOLD_DURATION_MS
-            peakSamples.removeAll { it.timestamp < cutoffTime }
-
-            // Update current peak (max dB in window)
+            val cutoff = timestamp - PEAK_HOLD_DURATION_MS
+            peakSamples.removeAll { it.timestamp < cutoff }
             currentPeakDb = peakSamples.maxOfOrNull { it.db } ?: DB_MIN
         }
-
         postInvalidate()
     }
 
@@ -126,96 +117,34 @@ class DbMeterView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        val width = width.toFloat()
-        val height = height.toFloat()
+        val w = width.toFloat()
+        val h = height.toFloat()
 
-        // Draw black background
-        canvas.drawRect(0f, 0f, width, height, backgroundPaint)
+        // Background
+        canvas.drawRect(0f, 0f, w, h, backgroundPaint)
 
-        // Get current peak (thread-safe)
         val peakDb = currentPeakDb
-
-        // Calculate meter fill percentage (DB_MIN to DB_MAX)
         val fillRatio = ((peakDb - DB_MIN) / (DB_MAX - DB_MIN)).coerceIn(0f, 1f)
 
-        // Determine color based on dB level
-        meterPaint.color = when {
-            peakDb < DB_GREEN_MAX -> Color.GREEN        // Quiet to normal
-            peakDb < DB_YELLOW_MAX -> Color.YELLOW      // Loud
-            else -> Color.RED                            // Very loud
+        // Color zone: split the fill into green / yellow / red segments
+        val greenEnd  = ((DB_GREEN_MAX  - DB_MIN) / (DB_MAX - DB_MIN)).coerceIn(0f, 1f)
+        val yellowEnd = ((DB_YELLOW_MAX - DB_MIN) / (DB_MAX - DB_MIN)).coerceIn(0f, 1f)
+
+        fun drawSegment(from: Float, to: Float, color: Int) {
+            val x0 = w * from
+            val x1 = w * minOf(to, fillRatio)
+            if (x1 > x0) {
+                meterPaint.color = color
+                meterRect.set(x0, 0f, x1, h)
+                canvas.drawRect(meterRect, meterPaint)
+            }
         }
 
-        // Draw meter bar (left to right fill)
-        val meterWidth = width * 0.7f  // 70% of width for bar
-        val meterHeight = height * 0.6f
-        val meterLeft = width * 0.05f
-        val meterTop = (height - meterHeight) / 2f
+        drawSegment(0f,        greenEnd,  0xFF1DB954.toInt())  // Spotify green
+        drawSegment(greenEnd,  yellowEnd, 0xFFFFC107.toInt())  // Amber
+        drawSegment(yellowEnd, 1f,        0xFFE53935.toInt())  // Red
 
-        meterRect.set(
-            meterLeft,
-            meterTop,
-            meterLeft + (meterWidth * fillRatio),
-            meterTop + meterHeight
-        )
-        canvas.drawRect(meterRect, meterPaint)
-
-        // Draw border around meter
-        canvas.drawRect(
-            meterLeft,
-            meterTop,
-            meterLeft + meterWidth,
-            meterTop + meterHeight,
-            borderPaint
-        )
-
-        // Draw dB value text
-        val dbText = if (peakDb > DB_MIN + 1f) {
-            String.format("%.1f dB", peakDb)
-        } else {
-            "-∞ dB"
-        }
-
-        val textX = meterLeft + meterWidth + (width - meterLeft - meterWidth) / 2f
-        val textY = height / 2f + textPaint.textSize / 3f  // Center vertically
-
-        canvas.drawText(dbText, textX, textY, textPaint)
-
-        // Draw scale markers (optional, for reference)
-        drawScaleMarkers(canvas, meterLeft, meterTop, meterWidth, meterHeight)
-    }
-
-    /**
-     * Draw dB scale reference markers.
-     */
-    private fun drawScaleMarkers(canvas: Canvas, left: Float, top: Float, width: Float, height: Float) {
-        val markerPaint = Paint().apply {
-            color = Color.GRAY
-            strokeWidth = 1f
-        }
-
-        val smallTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.GRAY
-            textSize = 18f
-            textAlign = Paint.Align.CENTER
-        }
-
-        // Draw markers at -60, -40, -20, -6, 0 dB
-        val markers = listOf(-60f, -40f, -20f, -6f, 0f)
-
-        for (db in markers) {
-            val ratio = ((db - DB_MIN) / (DB_MAX - DB_MIN)).coerceIn(0f, 1f)
-            val x = left + width * ratio
-
-            // Draw vertical line
-            canvas.drawLine(x, top, x, top + height, markerPaint)
-
-            // Draw label below meter
-            canvas.drawText(
-                db.toInt().toString(),
-                x,
-                top + height + 25f,
-                smallTextPaint
-            )
-        }
+        // Thin border
+        canvas.drawRect(0f, 0f, w, h, borderPaint)
     }
 }

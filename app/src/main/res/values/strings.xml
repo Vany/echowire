@@ -6,6 +6,7 @@
         name="service_notification_text"
     >WebSocket server active on port %1$d</string>
     <string name="default_service_name">EchoWire Service</string>
+    <string name="mdns_default">mDNS: EchoWire Service</string>
     <string name="connected_indicator">Connected: %1$d clients</string>
     <string name="not_connected">Not Connected</string>
     <string name="log_title">Event Log</string>
@@ -16,4 +17,17 @@
     <string name="language_label">Language:</string>
     <string name="language_en">EN</string>
     <string name="language_ru">RU</string>
+
+    <!-- STT mode tabs -->
+    <string name="tab_android">Android</string>
+    <string name="tab_percept">Percept</string>
+
+    <!-- Percept enrollment -->
+    <string name="enrollment_not_ready">Not enrolled</string>
+    <string name="enrollment_ready">Owner enrolled ✓</string>
+    <string name="sample_count_format">Samples: %1$d / 10</string>
+    <string name="sample_count_loaded">Profile loaded from disk</string>
+    <string name="record_sample">Record Voice Sample (3s)</string>
+    <string name="recording_in_progress">Recording…</string>
+    <string name="language_auto">Language: auto-detected</string>
 </resources>

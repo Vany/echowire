@@ -187,7 +187,9 @@ uhcli get listening
 - Audio processing must maintain real-time performance (<1.0x real-time factor)
 - Model loading must not block UI (show progress)
 - Memory usage must stay under 2GB (plenty of headroom on 8GB device)
-- Wake lock keeps screen on while service running (line power assumption)
+- **CPU wake lock**: `PARTIAL_WAKE_LOCK` in EchoWireService — prevents CPU sleep while STT pipeline runs (not deprecated, correct API)
+- **Screen on**: `FLAG_KEEP_SCREEN_ON` on MainActivity window, set when service starts, cleared when service stops — recommended replacement for deprecated `SCREEN_BRIGHT_WAKE_LOCK` since API 17
+- Line power assumption: device is always charging; Android "Stay awake while charging" developer option keeps screen on when app is backgrounded
 
 ## Performance Targets (Samsung Note20, Exynos 990, Mali-G77, 8GB RAM)
 - **Latency Target**: 200-300ms with GPU, 400-600ms with CPU fallback

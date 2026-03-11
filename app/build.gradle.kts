@@ -63,4 +63,8 @@ dependencies {
 
     // WebSocket server
     implementation("org.java-websocket:Java-WebSocket:1.5.5")
+
+    // Percept STT library + sherpa-onnx native runtime (local AARs, no Maven)
+    implementation(files("libs/percept.aar"))
+    implementation(files("libs/sherpa-onnx-1.12.28.aar"))
 }

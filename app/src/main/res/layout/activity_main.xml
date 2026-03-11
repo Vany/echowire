@@ -1,153 +1,204 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="16dp"
+    android:padding="10dp"
 >
 
+    <!-- mDNS service name -->
     <TextView
         android:id="@+id/nameTextView"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/default_service_name"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:padding="8dp"
-        android:textColor="@color/black"
-    />
-
-    <TextView
-        android:id="@+id/ipAddressTextView"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/ip_address_unknown"
-        android:textSize="14sp"
+        android:text="@string/mdns_default"
+        android:textSize="13sp"
         android:fontFamily="monospace"
         android:gravity="center"
-        android:padding="4dp"
+        android:paddingBottom="2dp"
         android:textColor="@color/black"
     />
 
+    <!-- Thin connection status bar -->
     <TextView
         android:id="@+id/connectionIndicator"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="@string/not_connected"
-        android:textSize="24sp"
-        android:textStyle="bold"
+        android:textSize="11sp"
         android:gravity="center"
-        android:padding="16dp"
+        android:paddingTop="3dp"
+        android:paddingBottom="3dp"
         android:background="@color/disconnected_red"
         android:textColor="@color/white"
     />
 
-    <!-- Waveform Analyzer: Green (idle), Yellow (recognizing), Red (error) -->
-    <com.echowire.ui.WaveformView
-        android:id="@+id/waveformView"
-        android:layout_width="match_parent"
-        android:layout_height="120dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="4dp"
-    />
-
-    <!-- DB Meter: Shows peak volume in last second -->
+    <!-- Peak level meter — always visible, app-level, not tab-specific -->
     <com.echowire.ui.DbMeterView
         android:id="@+id/dbMeterView"
         android:layout_width="match_parent"
-        android:layout_height="80dp"
+        android:layout_height="14dp"
         android:layout_marginTop="4dp"
-        android:layout_marginBottom="8dp"
+        android:layout_marginBottom="2dp"
     />
 
-    <TextView
+    <!-- Tab bar + Start/Stop toggle in one row -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/log_title"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-    />
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp"
+    >
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/sttTabLayout"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            app:tabMode="fixed"
+            app:tabGravity="fill"
+        />
 
+        <Button
+            android:id="@+id/serviceToggleButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:text="@string/start_service"
+            android:layout_marginStart="6dp"
+        />
+    </LinearLayout>
+
+    <!-- Tab content -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+    >
+
+        <!-- Google (Android STT) tab -->
+        <LinearLayout
+            android:id="@+id/androidSttContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="visible"
+        >
+
+            <!-- Language buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+            >
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/language_label"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="8dp"
+                />
+
+                <Button
+                    android:id="@+id/languageEnButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/language_en"
+                    android:layout_marginEnd="4dp"
+                />
+
+                <Button
+                    android:id="@+id/languageRuButton"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/language_ru"
+                />
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Percept tab -->
+        <LinearLayout
+            android:id="@+id/perceptSttContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+        >
+
+            <TextView
+                android:id="@+id/enrollmentStatusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/enrollment_not_ready"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+            />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+            >
+                <TextView
+                    android:id="@+id/sampleCountText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:textSize="13sp"
+                    android:layout_gravity="center_vertical"
+                    android:paddingStart="4dp"
+                />
+
+                <Button
+                    android:id="@+id/recordSampleButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/record_sample"
+                />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/perceptLanguageText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/language_auto"
+                android:textSize="12sp"
+                android:gravity="center"
+                android:paddingTop="4dp"
+                android:textColor="@color/black"
+            />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+    <!-- Event log — fills remaining space, no caption -->
     <ScrollView
+        android:id="@+id/logScrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="#F5F5F5"
-        android:padding="8dp"
+        android:layout_marginTop="8dp"
+        android:background="#F0F0F0"
+        android:padding="6dp"
     >
-
         <TextView
             android:id="@+id/logTextView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
+            android:textSize="10sp"
             android:fontFamily="monospace"
             android:textColor="@color/black"
         />
     </ScrollView>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp"
-    >
-
-        <Button
-            android:id="@+id/startButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/start_service"
-            android:layout_marginEnd="8dp"
-        />
-
-        <Button
-            android:id="@+id/stopButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/stop_service"
-        />
-    </LinearLayout>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp"
-    >
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/language_label"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_gravity="center_vertical"
-            android:layout_marginEnd="8dp"
-        />
-
-        <Button
-            android:id="@+id/languageEnButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/language_en"
-            android:layout_marginEnd="8dp"
-        />
-
-        <Button
-            android:id="@+id/languageRuButton"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/language_ru"
-        />
-    </LinearLayout>
 
 </LinearLayout>

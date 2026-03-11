@@ -275,15 +275,18 @@ class EnhancedAndroidSpeechRecognizer(
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
 
             // Request maximum data
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)  // Enable partial results
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, MAX_RESULTS)  // Get top 5 alternatives
-            putExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES, true)  // Request confidence scores
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, MAX_RESULTS)
+            putExtra(RecognizerIntent.EXTRA_CONFIDENCE_SCORES, true)
 
-            // Audio settings
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)  // Use cloud for better accuracy
+            // Endpointing — extend silence windows so trailing words aren't cut off.
+            // Default values are too aggressive (~500ms), causing last word trimming.
+            // These are hints; Google/Samsung STT on Android 12 honors them.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 300L)
 
-            // Try to enable on-device if available (device-dependent)
-            // putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, false)
         }
 
         try {
