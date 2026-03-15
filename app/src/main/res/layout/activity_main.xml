@@ -17,6 +17,18 @@
         android:textSize="13sp"
         android:fontFamily="monospace"
         android:gravity="center"
+        android:textColor="@color/black"
+    />
+
+    <!-- WebSocket address -->
+    <TextView
+        android:id="@+id/wsAddressTextView"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textSize="12sp"
+        android:fontFamily="monospace"
+        android:gravity="center"
         android:paddingBottom="2dp"
         android:textColor="@color/black"
     />

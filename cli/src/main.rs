@@ -12,7 +12,6 @@ use url::Url;
 
 const USE_IPV4_ONLY: bool = true;
 const SERVICE_TYPE: &str = "_echowire._tcp.local.";
-
 const DISCOVERY_TIMEOUT_SECS: u64 = 5;
 const CONFIG_RESPONSE_TIMEOUT_SECS: u64 = 3;
 
@@ -24,36 +23,45 @@ struct EchoWireService {
     addresses: Vec<IpAddr>,
 }
 
+// ── protocol messages ─────────────────────────────────────────────────────────
+
 #[derive(Debug, Deserialize)]
-struct RandomMessage {
-    #[serde(rename = "type")]
-    msg_type: String,
-    value: i64,
+struct HelloMessage {
+    device_name: String,
+    protocol_version: u32,
     timestamp: i64,
 }
 
 #[derive(Debug, Deserialize)]
-struct SpeechMessage {
-    #[serde(rename = "type")]
-    msg_type: String,
+struct PartialResultMessage {
     text: String,
-    embedding: Vec<f32>,
-    language: String,
     timestamp: i64,
-    segment_start: i64,
-    segment_end: i64,
-    processing_time_ms: i64,
-    audio_duration_ms: i64,
-    rtf: f32,
 }
 
 #[derive(Debug, Deserialize)]
-struct AudioStatusMessage {
-    #[serde(rename = "type")]
-    msg_type: String,
-    listening: bool,
-    audio_level: f32,
+struct Alternative {
+    text: String,
+    confidence: f32,
+}
+
+#[derive(Debug, Deserialize)]
+struct FinalResultMessage {
+    alternatives: Vec<Alternative>,
+    best_text: String,
+    best_confidence: f32,
+    language: String,
+    sentence_type: Option<String>,
     timestamp: i64,
+    session_duration_ms: i64,
+    speech_duration_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct RecognitionErrorMessage {
+    error_code: i32,
+    error_message: String,
+    timestamp: i64,
+    auto_restart: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -69,9 +77,11 @@ struct ConfigureResponse {
     value: String,
 }
 
+// ── CLI ───────────────────────────────────────────────────────────────────────
+
 #[derive(Parser)]
 #[command(name = "echowirecli")]
-#[command(about = "EchoWire WebSocket Client - Control and monitor EchoWire services", long_about = None)]
+#[command(about = "EchoWire WebSocket Client", long_about = None)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -79,464 +89,258 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Listen to messages from an EchoWire service (default behavior)
+    /// Listen to speech results (default)
     Listen,
-
-    /// Set a configuration value on an EchoWire service
-    ///
-    /// Example: echowirecli set name=MyDevice
+    /// Set a config value  e.g. echowirecli set name=MyDevice
     Set {
-        /// Configuration key=value pair (e.g., name=MyDevice)
         #[arg(value_parser = parse_key_value)]
         config: (String, String),
     },
-
-    /// Get a configuration value from an EchoWire service
-    ///
-    /// Example: echowirecli get name
-    Get {
-        /// Configuration key to retrieve
-        key: String,
-    },
+    /// Get a config value  e.g. echowirecli get name
+    Get { key: String },
 }
 
-/// Parse key=value pair from command line argument.
 fn parse_key_value(s: &str) -> Result<(String, String), String> {
-    let pos = s
-        .find('=')
-        .ok_or_else(|| format!("Invalid KEY=VALUE format: no '=' found in '{}'", s))?;
-
+    let pos = s.find('=').ok_or_else(|| format!("no '=' in '{}'", s))?;
     let key = s[..pos].trim().to_string();
-    let value = s[pos + 1..].trim().to_string();
-
-    if key.is_empty() {
-        return Err("Key cannot be empty".to_string());
-    }
-
-    // Remove quotes if present
-    let value = value.trim_matches('"').trim_matches('\'').to_string();
-
+    if key.is_empty() { return Err("empty key".to_string()); }
+    let value = s[pos + 1..].trim().trim_matches('"').trim_matches('\'').to_string();
     Ok((key, value))
 }
+
+// ── main ──────────────────────────────────────────────────────────────────────
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    println!("EchoWire CLI - WebSocket Client");
-    println!("================================\n");
+    println!("EchoWire CLI");
+    println!("============\n");
 
-    // Discover services
     let services = discover_services().await?;
-
     if services.is_empty() {
-        println!("No EchoWire services found on the network.");
-        println!(
-            "Make sure the EchoWire Android app is running and advertising on the same network."
-        );
+        println!("No EchoWire services found. Make sure the app is running on the same network.");
         return Ok(());
     }
 
-    // List discovered services
     println!("Discovered {} service(s):\n", services.len());
-    for (idx, service) in services.iter().enumerate() {
-        println!("  [{}] {}", idx + 1, service.name);
-        println!("      Host: {}", service.host);
-        println!("      Port: {}", service.port);
-        println!("      Addresses: {:?}\n", service.addresses);
+    for (i, svc) in services.iter().enumerate() {
+        println!("  [{}] {}  {}:{}", i + 1, svc.name, svc.host, svc.port);
     }
+    println!();
 
-    // Select random service
-    let selected = services
-        .choose(&mut rand::thread_rng())
-        .context("Failed to select random service")?;
+    let selected = services.choose(&mut rand::thread_rng()).context("no service")?;
+    println!("Connecting to: {}\n", selected.name);
 
-    println!("Randomly selected: {}\n", selected.name);
-
-    // Execute command
     match cli.command.unwrap_or(Commands::Listen) {
-        Commands::Listen => {
-            listen_to_service(selected).await?;
-        }
-        Commands::Set {
-            config: (key, value),
-        } => {
-            send_configure_set(selected, &key, &value).await?;
-        }
-        Commands::Get { key } => {
-            send_configure_get(selected, &key).await?;
-        }
+        Commands::Listen => listen_to_service(selected).await?,
+        Commands::Set { config: (key, value) } => send_configure_set(selected, &key, &value).await?,
+        Commands::Get { key } => send_configure_get(selected, &key).await?,
     }
 
     Ok(())
 }
 
-/// Discover EchoWire services via mDNS.
-/// Returns list of discovered services after timeout.
+// ── discovery ─────────────────────────────────────────────────────────────────
+
 async fn discover_services() -> Result<Vec<EchoWireService>> {
-    println!(
-        "Discovering services ({}s timeout)...\n",
-        DISCOVERY_TIMEOUT_SECS
-    );
-    println!("ℹ️  Looking for service type: {}", SERVICE_TYPE);
-    if USE_IPV4_ONLY {
-        println!("ℹ️  IPv4-only mode enabled\n");
-    }
+    println!("Discovering services ({}s timeout)...", DISCOVERY_TIMEOUT_SECS);
+    if USE_IPV4_ONLY { println!("IPv4 only\n"); }
 
-    let mdns = ServiceDaemon::new().context("Failed to create mDNS daemon")?;
-    let receiver = mdns
-        .browse(SERVICE_TYPE)
-        .context("Failed to browse for services")?;
-
+    let mdns = ServiceDaemon::new().context("mDNS daemon failed")?;
+    let receiver = mdns.browse(SERVICE_TYPE).context("mDNS browse failed")?;
     let mut services = Vec::new();
 
-    // Collect services for the discovery timeout period
-    let discovery_task = async {
+    let task = async {
         while let Ok(event) = receiver.recv_async().await {
             match event {
                 ServiceEvent::ServiceResolved(info) => {
                     let addresses: Vec<IpAddr> = info.get_addresses().iter().copied().collect();
-
                     if !addresses.is_empty() {
-                        let service = EchoWireService {
+                        println!("  Found: {} at {}:{}", info.get_fullname(), info.get_hostname(), info.get_port());
+                        services.push(EchoWireService {
                             name: info.get_fullname().to_string(),
                             host: info.get_hostname().to_string(),
                             port: info.get_port(),
                             addresses,
-                        };
-                        println!(
-                            "  Found: {} at {}:{}",
-                            service.name, service.host, service.port
-                        );
-                        services.push(service);
+                        });
                     }
                 }
-                ServiceEvent::ServiceRemoved(_, fullname) => {
-                    println!("  Removed: {}", fullname);
-                    services.retain(|s| s.name != fullname);
-                }
-                ServiceEvent::SearchStarted(_) => {
-                    // Search started, continue
-                }
-                ServiceEvent::SearchStopped(_) => {
-                    // Search stopped, we're done
-                    break;
-                }
+                ServiceEvent::ServiceRemoved(_, name) => { services.retain(|s| s.name != name); }
+                ServiceEvent::SearchStopped(_) => break,
                 _ => {}
             }
         }
     };
 
-    // Wait for discovery timeout
-    let _ = timeout(Duration::from_secs(DISCOVERY_TIMEOUT_SECS), discovery_task).await;
-
-    mdns.shutdown().context("Failed to shutdown mDNS daemon")?;
-
+    let _ = timeout(Duration::from_secs(DISCOVERY_TIMEOUT_SECS), task).await;
+    mdns.shutdown().context("mDNS shutdown failed")?;
     println!();
     Ok(services)
 }
 
-/// Select appropriate IP address based on USE_IPV4_ONLY setting.
+// ── helpers ───────────────────────────────────────────────────────────────────
+
 fn select_address(addresses: &[IpAddr]) -> Result<&IpAddr> {
     if USE_IPV4_ONLY {
-        addresses
-            .iter()
-            .find(|addr| matches!(addr, IpAddr::V4(_)))
-            .context("No IPv4 address found (USE_IPV4_ONLY is enabled)")
+        addresses.iter().find(|a| matches!(a, IpAddr::V4(_))).context("No IPv4 address")
     } else {
-        addresses.first().context("Service has no addresses")
+        addresses.first().context("No addresses")
     }
 }
 
-/// Format IP address for URL (IPv6 needs brackets).
-fn format_address_for_url(addr: &IpAddr) -> String {
+fn format_addr(addr: &IpAddr) -> String {
     match addr {
         IpAddr::V4(v4) => v4.to_string(),
         IpAddr::V6(v6) => format!("[{}]", v6),
     }
 }
 
-/// Connect to selected service and listen to broadcast messages.
+fn fmt_ts(ms: i64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms)
+        .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
+        .unwrap_or_else(|| ms.to_string())
+}
+
+// ── listen ────────────────────────────────────────────────────────────────────
+
 async fn listen_to_service(service: &EchoWireService) -> Result<()> {
-    let address = select_address(&service.addresses)?;
+    let addr = select_address(&service.addresses)?;
+    let url = Url::parse(&format!("ws://{}:{}/", format_addr(addr), service.port))?;
+    let (ws, _) = connect_async(url).await.context("WebSocket connect failed")?;
+    println!("Connected. Listening (Ctrl+C to stop):\n");
 
-    let addr_str = format_address_for_url(address);
-    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-
-    println!("ℹ️  Connecting to: {}", ws_url);
-    println!("ℹ️  IP Address: {}", address);
-    println!("ℹ️  Port: {}", service.port);
-    println!("ℹ️  Service: {}\n", service.name);
-
-    let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
-    let (ws_stream, _) = connect_async(url)
-        .await
-        .context("Failed to connect to WebSocket server")?;
-
-    println!("✅ Connected!\n");
-    println!("Receiving messages (Ctrl+C to stop):\n");
-
-    let (_write, mut read) = ws_stream.split();
-
-    // Setup Ctrl+C handler
+    let (_write, mut read) = ws.split();
     let ctrl_c = tokio::signal::ctrl_c();
     tokio::pin!(ctrl_c);
 
-    // Receive messages
     loop {
         tokio::select! {
-            msg = read.next() => {
-                match msg {
-                    Some(Ok(Message::Text(text))) => {
-                        handle_message(&text);
-                    }
-                    Some(Ok(Message::Ping(_))) => {
-                        // WebSocket library handles pong automatically
-                    }
-                    Some(Ok(Message::Pong(_))) => {
-                        // Pong received
-                    }
-                    Some(Ok(Message::Close(_))) => {
-                        println!("\nServer closed connection");
-                        break;
-                    }
-                    Some(Err(e)) => {
-                        println!("\nError receiving message: {}", e);
-                        break;
-                    }
-                    None => {
-                        println!("\nConnection closed");
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-            _ = &mut ctrl_c => {
-                println!("\n\nShutting down...");
-                break;
-            }
+            msg = read.next() => match msg {
+                Some(Ok(Message::Text(text))) => handle_message(&text),
+                Some(Ok(Message::Ping(_) | Message::Pong(_))) => {}
+                Some(Ok(Message::Close(_))) | None => { println!("\nConnection closed"); break; }
+                Some(Err(e)) => { println!("\nError: {}", e); break; }
+                _ => {}
+            },
+            _ = &mut ctrl_c => { println!("\nShutting down..."); break; }
         }
     }
-
     Ok(())
 }
 
-/// Send configure message to set a value and display response.
-async fn send_configure_set(service: &EchoWireService, key: &str, value: &str) -> Result<()> {
-    let address = select_address(&service.addresses)?;
+// ── message handler ───────────────────────────────────────────────────────────
 
-    let addr_str = format_address_for_url(address);
-    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-
-    println!("ℹ️  Connecting to: {}", ws_url);
-    println!("ℹ️  IP Address: {}", address);
-    println!("ℹ️  Port: {}", service.port);
-
-    let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
-    let (ws_stream, _) = connect_async(url)
-        .await
-        .context("Failed to connect to WebSocket server")?;
-
-    println!("✅ Connected!\n");
-
-    let (mut write, mut read) = ws_stream.split();
-
-    // Send configure message
-    let request = ConfigureRequest {
-        configure: key.to_string(),
-        value: Some(value.to_string()),
-    };
-
-    let request_json =
-        serde_json::to_string(&request).context("Failed to serialize configure request")?;
-
-    println!("Sending: {}", request_json);
-    write
-        .send(Message::Text(request_json))
-        .await
-        .context("Failed to send configure message")?;
-
-    // Wait for response with timeout
-    let response_future = async {
-        while let Some(msg) = read.next().await {
-            match msg {
-                Ok(Message::Text(text)) => {
-                    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(&text) {
-                        if response.configure == key {
-                            return Ok(response);
-                        }
-                    }
-                }
-                Ok(Message::Close(_)) => {
-                    return Err(anyhow!("Server closed connection"));
-                }
-                Err(e) => {
-                    return Err(anyhow!("Error receiving message: {}", e));
-                }
-                _ => {}
-            }
-        }
-        Err(anyhow!("Connection closed without response"))
-    };
-
-    match timeout(
-        Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS),
-        response_future,
-    )
-    .await
-    {
-        Ok(Ok(response)) => {
-            println!("\nConfiguration updated:");
-            println!("  {} = {}", response.configure, response.value);
-            Ok(())
-        }
-        Ok(Err(e)) => Err(anyhow!("Failed to receive response: {}", e)),
-        Err(_) => Err(anyhow!("Timeout waiting for response")),
-    }
-}
-
-/// Send configure message to get a value and display response.
-async fn send_configure_get(service: &EchoWireService, key: &str) -> Result<()> {
-    let address = select_address(&service.addresses)?;
-
-    let addr_str = format_address_for_url(address);
-    let ws_url = format!("ws://{}:{}/", addr_str, service.port);
-
-    println!("ℹ️  Connecting to: {}", ws_url);
-    println!("ℹ️  IP Address: {}", address);
-    println!("ℹ️  Port: {}", service.port);
-
-    let url = Url::parse(&ws_url).context("Invalid WebSocket URL")?;
-    let (ws_stream, _) = connect_async(url)
-        .await
-        .context("Failed to connect to WebSocket server")?;
-
-    println!("✅ Connected!\n");
-
-    let (mut write, mut read) = ws_stream.split();
-
-    // Send configure message without value (get operation)
-    let request = ConfigureRequest {
-        configure: key.to_string(),
-        value: None,
-    };
-
-    let request_json =
-        serde_json::to_string(&request).context("Failed to serialize configure request")?;
-
-    println!("Sending: {}", request_json);
-    write
-        .send(Message::Text(request_json))
-        .await
-        .context("Failed to send configure message")?;
-
-    // Wait for response with timeout
-    let response_future = async {
-        while let Some(msg) = read.next().await {
-            match msg {
-                Ok(Message::Text(text)) => {
-                    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(&text) {
-                        if response.configure == key {
-                            return Ok(response);
-                        }
-                    }
-                }
-                Ok(Message::Close(_)) => {
-                    return Err(anyhow!("Server closed connection"));
-                }
-                Err(e) => {
-                    return Err(anyhow!("Error receiving message: {}", e));
-                }
-                _ => {}
-            }
-        }
-        Err(anyhow!("Connection closed without response"))
-    };
-
-    match timeout(
-        Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS),
-        response_future,
-    )
-    .await
-    {
-        Ok(Ok(response)) => {
-            println!("\nCurrent configuration:");
-            println!("  {} = {}", response.configure, response.value);
-            Ok(())
-        }
-        Ok(Err(e)) => Err(anyhow!("Failed to receive response: {}", e)),
-        Err(_) => Err(anyhow!("Timeout waiting for response")),
-    }
-}
-
-/// Parse and display received message.
 fn handle_message(text: &str) {
-    // Try to parse as speech message first
-    if let Ok(msg) = serde_json::from_str::<SpeechMessage>(text) {
-        if msg.msg_type == "speech" {
-            let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
-                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
-                .unwrap_or_else(|| msg.timestamp.to_string());
-
-            // Display text with language and timing
-            println!(
-                "[{}] Speech [{}] ({:.0}ms, RTF={:.2}): \"{}\"",
-                datetime, msg.language, msg.processing_time_ms as f32, msg.rtf, msg.text
-            );
-
-            // Show embedding preview (first 5 values)
-            let embedding_preview: Vec<String> = msg
-                .embedding
-                .iter()
-                .take(5)
-                .map(|v| format!("{:.4}", v))
-                .collect();
-            println!(
-                "      Embedding: [{}...] ({} dims)",
-                embedding_preview.join(", "),
-                msg.embedding.len()
-            );
-            return;
-        }
-    }
-
-    // Try to parse as audio status message
-    if let Ok(msg) = serde_json::from_str::<AudioStatusMessage>(text) {
-        if msg.msg_type == "audio_status" {
-            let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
-                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
-                .unwrap_or_else(|| msg.timestamp.to_string());
-
-            let status = if msg.listening { "LISTENING" } else { "IDLE" };
-            let level_bar = "█".repeat((msg.audio_level * 20.0) as usize);
-            println!(
-                "[{}] Audio: {} | Level: {:<20} {:.1}%",
-                datetime,
-                status,
-                level_bar,
-                msg.audio_level * 100.0
-            );
-            return;
-        }
-    }
-
-    // Try to parse as random message (legacy)
-    if let Ok(msg) = serde_json::from_str::<RandomMessage>(text) {
-        if msg.msg_type == "random" {
-            let datetime = chrono::DateTime::from_timestamp_millis(msg.timestamp)
-                .map(|dt| dt.format("%H:%M:%S%.3f").to_string())
-                .unwrap_or_else(|| msg.timestamp.to_string());
-            println!("[{}] Random: {}", datetime, msg.value);
-            return;
-        }
-    }
-
-    // Try to parse as configure response
-    if let Ok(response) = serde_json::from_str::<ConfigureResponse>(text) {
-        println!("Config: {} = {}", response.configure, response.value);
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        println!("Raw: {}", text);
         return;
-    }
+    };
 
-    // Unknown message format
-    println!("Raw message: {}", text);
+    match value.get("type").and_then(|t| t.as_str()) {
+        Some("hello") => {
+            if let Ok(m) = serde_json::from_value::<HelloMessage>(value) {
+                println!("[{}] Device: \"{}\" protocol v{}", fmt_ts(m.timestamp), m.device_name, m.protocol_version);
+            }
+        }
+        Some("partial_result") => {
+            if let Ok(m) = serde_json::from_value::<PartialResultMessage>(value) {
+                if !m.text.is_empty() {
+                    print!("{} ", m.text);
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
+            }
+        }
+        Some("final_result") => {
+            if let Ok(m) = serde_json::from_value::<FinalResultMessage>(value) {
+                let ts = fmt_ts(m.timestamp);
+                let type_tag = m.sentence_type.as_deref().unwrap_or("");
+                let conf_pct = (m.best_confidence * 100.0) as u32;
+                println!(); // end partial line
+                if type_tag.is_empty() {
+                    println!("[{}] [{}] \"{}\" ({}%  {}ms)", ts, m.language, m.best_text, conf_pct, m.speech_duration_ms);
+                } else {
+                    println!("[{}] [{}][{}] \"{}\" ({}%  {}ms)", ts, m.language, type_tag, m.best_text, conf_pct, m.speech_duration_ms);
+                }
+                if m.alternatives.len() > 1 {
+                    for (i, alt) in m.alternatives.iter().enumerate().skip(1) {
+                        println!("      alt{}: \"{}\" ({:.0}%)", i + 1, alt.text, alt.confidence * 100.0);
+                    }
+                }
+            }
+        }
+        Some("recognition_error") => {
+            if let Ok(m) = serde_json::from_value::<RecognitionErrorMessage>(value) {
+                let restart = if m.auto_restart { " (auto-restart)" } else { "" };
+                println!("\n[{}] ERROR {}: {}{}", fmt_ts(m.timestamp), m.error_code, m.error_message, restart);
+            }
+        }
+        _ => {
+            // configure response or unknown
+            if let Ok(r) = serde_json::from_value::<ConfigureResponse>(value) {
+                println!("Config: {} = {}", r.configure, r.value);
+            } else {
+                println!("Unknown: {}", text);
+            }
+        }
+    }
+}
+
+// ── configure ─────────────────────────────────────────────────────────────────
+
+type WsSink = futures_util::stream::SplitSink<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    Message,
+>;
+type WsStream = futures_util::stream::SplitStream<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+>;
+
+async fn connect_ws(service: &EchoWireService) -> Result<(WsSink, WsStream)> {
+    let addr = select_address(&service.addresses)?;
+    let url = Url::parse(&format!("ws://{}:{}/", format_addr(addr), service.port))?;
+    let (ws, _) = connect_async(url).await.context("WebSocket connect failed")?;
+    println!("Connected to ws://{}:{}/\n", format_addr(addr), service.port);
+    Ok(ws.split())
+}
+
+async fn send_configure_set(service: &EchoWireService, key: &str, value: &str) -> Result<()> {
+    let (mut write, mut read) = connect_ws(service).await?;
+    let req = serde_json::to_string(&ConfigureRequest { configure: key.to_string(), value: Some(value.to_string()) })?;
+    println!("Sending: {}", req);
+    write.send(Message::Text(req)).await?;
+    wait_config_response(&mut read, key).await
+}
+
+async fn send_configure_get(service: &EchoWireService, key: &str) -> Result<()> {
+    let (mut write, mut read) = connect_ws(service).await?;
+    let req = serde_json::to_string(&ConfigureRequest { configure: key.to_string(), value: None })?;
+    println!("Sending: {}", req);
+    write.send(Message::Text(req)).await?;
+    wait_config_response(&mut read, key).await
+}
+
+async fn wait_config_response(read: &mut WsStream, key: &str) -> Result<()> {
+    let fut = async {
+        while let Some(msg) = read.next().await {
+            match msg {
+                Ok(Message::Text(text)) => {
+                    if let Ok(r) = serde_json::from_str::<ConfigureResponse>(&text) {
+                        if r.configure == key {
+                            println!("{} = {}", r.configure, r.value);
+                            return Ok(());
+                        }
+                    }
+                }
+                Ok(Message::Close(_)) => return Err(anyhow!("Server closed connection")),
+                Err(e) => return Err(anyhow!("WebSocket error: {}", e)),
+                _ => {}
+            }
+        }
+        Err(anyhow!("Connection closed without response"))
+    };
+
+    timeout(Duration::from_secs(CONFIG_RESPONSE_TIMEOUT_SECS), fut)
+        .await
+        .map_err(|_| anyhow!("Timeout waiting for config response"))?
 }

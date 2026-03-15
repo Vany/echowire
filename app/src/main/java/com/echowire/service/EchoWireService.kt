@@ -176,18 +176,33 @@ class EchoWireService : Service(), SttListener {
     // Backend switching
 
     fun switchToAndroidStt(language: String = "en-US") {
+        // No-op if already running Android STT on this language — prevents double-start
+        // from startAllComponents() racing with onServiceConnected → applyCurrentTab().
+        val existing = currentBackend as? AndroidSttBackend
+        if (existing != null && existing.getLanguage() == language && existing.isActive()) {
+            Log.d(TAG, "Android STT already running ($language), skipping switch")
+            return
+        }
         currentBackend?.stop()
+        // Stop AudioLevelMonitor: Android SpeechRecognizer holds VOICE_RECOGNITION source
+        // exclusively on this device — concurrent AudioRecord silences SODA. Level meter
+        // is driven by onAudioLevel (SpeechRecognizer.onRmsChanged) instead.
+        audioLevelMonitor?.stop()
+        audioLevelMonitor = null
         val backend = androidBackend ?: AndroidSttBackend(this, language).also { androidBackend = it }
         backend.setListener(this)
         backend.start()
         currentBackend = backend
         resetPartialTracking()
         listener?.onBackendChanged(backend.displayName)
-        Log.i(TAG, "Switched to Android STT")
+        Log.i(TAG, "Switched to Android STT ($language)")
     }
 
     fun switchToPercept() {
         currentBackend?.stop()
+        // Restart AudioLevelMonitor for Percept — Percept uses its own audio capture,
+        // so AudioLevelMonitor can run independently again.
+        if (audioLevelMonitor == null) startAudioLevelMonitor()
         val backend = perceptBackend
             ?: PerceptSttBackend(this, ownerProfile).also { perceptBackend = it }
         backend.setListener(this)
@@ -208,8 +223,8 @@ class EchoWireService : Service(), SttListener {
     private fun startAllComponents() {
         startWebSocketServer()
         startScheduledTasks()
-        startAudioLevelMonitor()
-        // Default to Android STT
+        // AudioLevelMonitor is started by switchToPercept() only.
+        // switchToAndroidStt() suppresses it and uses SpeechRecognizer.onRmsChanged instead.
         switchToAndroidStt()
     }
 
@@ -430,8 +445,18 @@ class EchoWireService : Service(), SttListener {
     }
 
     override fun onAudioLevel(rmsDb: Float, timestampMs: Long) {
-        // Meter is driven by AudioLevelMonitor (real dBFS, backend-independent).
-        // STT-library level callbacks are intentionally ignored here.
+        // When Android STT is active, AudioLevelMonitor is stopped — drive meter from
+        // SpeechRecognizer.onRmsChanged (same stream, no extra AudioRecord needed).
+        // SpeechRecognizer.onRmsChanged returns [0, ~10] range; map to [-60, 0] dBFS
+        // to match AudioLevelMonitor's scale used by the Percept meter.
+        if (currentBackend is AndroidSttBackend) {
+            val now = System.currentTimeMillis()
+            if (now - lastAudioLevelBroadcast >= AUDIO_LEVEL_THROTTLE_MS) {
+                lastAudioLevelBroadcast = now
+                val dBFS = (rmsDb * 6f - 60f).coerceIn(-60f, 0f)
+                listener?.onAudioLevelChanged(dBFS)
+            }
+        }
     }
 
     override fun onStateChanged(listening: Boolean) {

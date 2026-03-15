@@ -57,10 +57,13 @@ class PerceptSttBackend(
                             Log.d(TAG, "Using token text over trimmed sentence: \"$finalText\" vs \"$sentenceText\"")
                         }
                         lastTokenText = ""
+                        // ownerSimilarity is null before enrollment; fall back to 1.0 so callers
+                        // can always treat it as a valid confidence score.
+                        val confidence = event.ownerSimilarity ?: 1.0f
                         listener?.onFinalResult(
                             text = finalText,
                             alternatives = listOf(finalText),
-                            confidences = floatArrayOf(1.0f),
+                            confidences = floatArrayOf(confidence),
                             language = event.language.toCode(),
                             sentenceType = event.type.name,
                             timestampMs = event.endMs,
@@ -72,7 +75,10 @@ class PerceptSttBackend(
                         listener?.onAudioLevel(event.rmsDb, System.currentTimeMillis())
                     }
                     is SpeechEvent.Enrolled -> {
-                        Log.i(TAG, "Owner enrolled: ${event.sampleCount} samples")
+                        Log.i(TAG, "Owner enrolled: ${event.sampleCount} samples, ready=${event.isReady}")
+                    }
+                    is SpeechEvent.RefinementSample -> {
+                        Log.d(TAG, "Refinement sample accepted (session=${event.sessionSampleCount})")
                     }
                 }
             }

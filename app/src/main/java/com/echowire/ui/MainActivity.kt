@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity(), EchoWireService.ServiceListener {
 
     // Shared header
     private lateinit var nameTextView: TextView
+    private lateinit var wsAddressTextView: TextView
     private lateinit var connectionIndicator: TextView
     private var headerMdnsName = "EchoWire Service"
     private var headerPort = 0
@@ -126,6 +127,7 @@ class MainActivity : AppCompatActivity(), EchoWireService.ServiceListener {
 
         // Header
         nameTextView        = findViewById(R.id.nameTextView)
+        wsAddressTextView   = findViewById(R.id.wsAddressTextView)
         connectionIndicator = findViewById(R.id.connectionIndicator)
 
         // Tabs
@@ -194,10 +196,10 @@ class MainActivity : AppCompatActivity(), EchoWireService.ServiceListener {
     }
 
     private fun updateEnrollmentUi(svc: EchoWireService) {
-        val profile = svc.ownerProfile
-        val count   = profile.getSampleCount()
-        val loaded  = profile.meanEmbedding != null && count == 0  // restored from disk
-        val ready   = profile.isReady() || loaded
+        val profile     = svc.ownerProfile
+        val count  = profile.getSampleCount()
+        val loaded = profile.loadedSampleCount > 0 && count == 0  // profile restored from disk, no new samples yet
+        val ready       = profile.isReady() || loaded
 
         enrollmentStatusText.text = if (ready) getString(R.string.enrollment_ready)
                                     else getString(R.string.enrollment_not_ready)
@@ -351,10 +353,8 @@ class MainActivity : AppCompatActivity(), EchoWireService.ServiceListener {
 
     private fun updateHeader() {
         val ip = getDeviceIpAddress()
-        nameTextView.text = if (ip != null && headerPort > 0)
-            "mDNS: $headerMdnsName  ·  ws://$ip:$headerPort"
-        else
-            "mDNS: $headerMdnsName"
+        nameTextView.text = "mDNS: $headerMdnsName"
+        wsAddressTextView.text = if (ip != null && headerPort > 0) "ws://$ip:$headerPort" else ""
     }
 
     private fun getDeviceIpAddress(): String? {
