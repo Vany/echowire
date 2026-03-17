@@ -29,18 +29,19 @@ class PerceptSttBackend(
     private var listener: SttListener? = null
     private var sessionStartMs = 0L
 
-    // Last token text received — may be richer than Sentence.text when Percept VAD fires early.
-    // Sentence.text is used if it's longer (i.e., Percept corrected something); otherwise token.
-    @Volatile private var lastTokenText = ""
+    // Longest token text seen this utterance — safety net against Percept VAD trimming.
+    // If Sentence.text is shorter than the best token, we use the token (more complete).
+    @Volatile private var bestTokenText = ""
 
     override fun start() {
         sessionStartMs = System.currentTimeMillis()
-        lastTokenText = ""
+        bestTokenText = ""
         try {
             percept = Percept.create(context, ownerProfile) { event ->
                 when (event) {
                     is SpeechEvent.Token -> {
-                        lastTokenText = event.text
+                        Log.d(TAG, "TOKEN [${event.text}] lang=${event.language}")
+                        if (event.text.length > bestTokenText.length) bestTokenText = event.text
                         listener?.onPartialResult(
                             event.text,
                             event.language.toCode(),
@@ -48,15 +49,15 @@ class PerceptSttBackend(
                         )
                     }
                     is SpeechEvent.Sentence -> {
-                        // Percept VAD sometimes finalizes before the last word is committed.
-                        // Use whichever text is longer: sentence (corrected) or last token (fuller).
                         val sentenceText = event.text
-                        val finalText = if (lastTokenText.length > sentenceText.length)
-                            lastTokenText else sentenceText
+                        Log.d(TAG, "SENTENCE [${sentenceText}] best_token=[$bestTokenText] type=${event.type}")
+                        // Use whichever text is longer: sentence or best accumulated token.
+                        val finalText = if (bestTokenText.length > sentenceText.length)
+                            bestTokenText else sentenceText
                         if (finalText != sentenceText) {
-                            Log.d(TAG, "Using token text over trimmed sentence: \"$finalText\" vs \"$sentenceText\"")
+                            Log.i(TAG, "Recovered trimmed text: \"$finalText\" vs sentence \"$sentenceText\"")
                         }
-                        lastTokenText = ""
+                        bestTokenText = ""
                         // ownerSimilarity is null before enrollment; fall back to 1.0 so callers
                         // can always treat it as a valid confidence score.
                         val confidence = event.ownerSimilarity ?: 1.0f
@@ -92,7 +93,7 @@ class PerceptSttBackend(
     }
 
     override fun stop() {
-        lastTokenText = ""
+        bestTokenText = ""
         try {
             percept?.stop()
         } catch (e: Exception) {
