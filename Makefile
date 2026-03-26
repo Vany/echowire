@@ -9,7 +9,7 @@ export JAVA_HOME := $(JAVA_21_HOME)
 export ANDROID_HOME := $(HOME)/Library/Android/sdk
 
 GRADLE := ./gradlew
-APK_PATH := app/build/outputs/apk/debug/app-debug.apk
+APK_PATH := app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
 PACKAGE := com.echowire
 CLI_DIR := cli
 CLI_BINARY := $(CLI_DIR)/target/release/echowirecli

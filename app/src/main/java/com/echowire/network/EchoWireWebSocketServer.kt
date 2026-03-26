@@ -21,7 +21,8 @@ class EchoWireWebSocketServer(
     private val runtimeConfig: RuntimeConfig,
     private val onClientConnect: (String) -> Unit,
     private val onClientDisconnect: (String) -> Unit,
-    private val onError: (Exception) -> Unit
+    private val onError: (Exception) -> Unit,
+    private val onServerFailed: () -> Unit = {}
 ) : WebSocketServer(InetSocketAddress(InetAddress.getByName("0.0.0.0"), port)) {
 
     companion object {
@@ -89,9 +90,14 @@ class EchoWireWebSocketServer(
     }
 
     override fun onError(conn: WebSocket?, ex: Exception) {
-        val clientAddress = conn?.remoteSocketAddress?.toString() ?: "unknown"
-        Log.e(TAG, "WebSocket error from $clientAddress", ex)
-        onError(ex)
+        if (conn == null) {
+            // Server-level error: socket died, no more connections will be accepted
+            Log.e(TAG, "WebSocket server-level error — server thread died", ex)
+            onServerFailed()
+        } else {
+            Log.e(TAG, "WebSocket error from ${conn.remoteSocketAddress}", ex)
+            onError(ex)
+        }
     }
 
     override fun onStart() {
@@ -157,7 +163,7 @@ class EchoWireWebSocketServer(
     fun shutdown() {
         try {
             Log.i(TAG, "Shutting down WebSocket server")
-            stop(1000) // 1 second timeout
+            stop(3000) // 3s — gives server thread time to release the TCP socket
         } catch (e: Exception) {
             Log.e(TAG, "Error during shutdown", e)
         }

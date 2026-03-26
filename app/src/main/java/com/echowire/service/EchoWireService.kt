@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -94,6 +95,7 @@ class EchoWireService : Service(), SttListener {
 
     // System
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var scheduler: ScheduledExecutorService? = null
     private var lastAudioLevelBroadcast = 0L
     private var isRunning = false
@@ -294,11 +296,17 @@ class EchoWireService : Service(), SttListener {
                     val count = webSocketServer?.getClientCount() ?: 0
                     listener?.onClientDisconnected(addr, count)
                 },
-                onError = { ex -> listener?.onError("WebSocket error", ex) }
+                onError = { ex -> listener?.onError("WebSocket error", ex) },
+                onServerFailed = {
+                    Log.w(TAG, "WebSocket server thread died — restarting")
+                    webSocketServer = null
+                    startWebSocketServer()
+                }
             )
             webSocketServer?.start()
             updateNotification(serverPort)
-            acquireWakeLock()
+            if (wakeLock == null) acquireWakeLock()
+            unregisterMdnsService()
             registerMdnsService()
             listener?.onServiceStarted(serverPort)
             Log.i(TAG, "WebSocket server started on port $serverPort")
@@ -354,6 +362,16 @@ class EchoWireService : Service(), SttListener {
             lock.acquire()
             wakeLock = lock
             Log.i(TAG, "CPU wake lock acquired")
+
+            // WIFI_MODE_FULL_LOW_LATENCY: prevents Samsung's aggressive WiFi power saving
+            // from killing the TCP server socket when the screen turns off.
+            // Without this, new WebSocket connections are silently dropped while the server
+            // "runs" — mDNS (UDP) still works but TCP accept fails.
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val wl = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "EchoWireService::WifiLock")
+            wl.acquire()
+            wifiLock = wl
+            Log.i(TAG, "WiFi low-latency lock acquired")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to acquire wake lock", e)
         }
@@ -362,6 +380,7 @@ class EchoWireService : Service(), SttListener {
     private fun releaseWakeLock() {
         try {
             wakeLock?.let { if (it.isHeld) it.release() }; wakeLock = null
+            wifiLock?.let { if (it.isHeld) it.release() }; wifiLock = null
         } catch (e: Exception) {
             Log.e(TAG, "Error releasing wake lock", e)
         }
